@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🌲 Aserradero Tycoon — producir, vender, automatizar</title>
+<style>
+  :root {
+    --bg: #0f1713;
+    --panel: #16241c;
+    --panel2: #1d3026;
+    --line: #2c4435;
+    --green: #4ade80;
+    --green-d: #22c55e;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --txt: #e8f0ea;
+    --muted: #8aa595;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2a20, var(--bg));
+    color: var(--txt);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    background: rgba(0,0,0,0.2);
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  .stat { display: flex; flex-direction: column; line-height: 1.2; }
+  .stat .label { font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: .5px; }
+  .stat .value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .value.money { color: var(--green); }
+  .stat .sub { font-size: 10px; color: var(--muted); }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px){ .wrap { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 14px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .card .desc { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+  /* cadena de produccion */
+  .chain { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .node { text-align: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; }
+  .node .emoji { font-size: 26px; }
+  .node .qty { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .node .name { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .node .rate { font-size: 10px; color: var(--green); }
+  .arrow { color: var(--muted); font-size: 20px; text-align:center; }
+
+  button.act {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--green-d);
+    background: linear-gradient(180deg, #2c5a3c, #224a30); color: #eaffef; font-weight: 700;
+    font-size: 14px; cursor: pointer; transition: transform .04s, filter .15s;
+  }
+  button.act:active { transform: scale(.98); }
+  button.act:hover { filter: brightness(1.12); }
+  .acts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* tienda */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tab { flex: 1; padding: 8px; text-align: center; font-size: 12px; font-weight: 600; border-radius: 8px;
+         border: 1px solid var(--line); background: var(--panel2); color: var(--muted); cursor: pointer; }
+  .tab.active { color: var(--txt); border-color: var(--green-d); background: #21392b; }
+
+  .item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px;
+          border: 1px solid var(--line); margin-bottom: 8px; background: var(--panel2); }
+  .item .ic { font-size: 24px; width: 30px; text-align: center; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .info .t { font-size: 13px; font-weight: 700; }
+  .item .info .d { font-size: 11px; color: var(--muted); }
+  .item .owned { font-size: 11px; color: var(--blue); font-weight: 700; }
+  .buy { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--green-d); background: #224a30;
+         color: #eaffef; font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .buy:disabled { opacity: .4; cursor: not-allowed; border-color: var(--line); background: var(--panel); }
+  .buy:hover:not(:disabled){ filter: brightness(1.15); }
+
+  /* mercado / precio */
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; font-size: 13px; }
+  .row .k { color: var(--muted); }
+  .row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+  input[type=range]{ width: 100%; accent-color: var(--green); }
+  .bar { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; margin-top: 4px; border: 1px solid var(--line); }
+  .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--green-d), var(--green)); }
+
+  /* leccion */
+  .lesson { font-size: 13px; line-height: 1.45; padding: 12px; border-radius: 10px; border-left: 4px solid var(--amber);
+            background: #251f10; color: #ffe9b8; }
+  .lesson.good { border-left-color: var(--green); background: #12241a; color: #c7f7d6; }
+  .lesson.bad  { border-left-color: var(--red); background: #2a1414; color: #ffd0d0; }
+  .lesson b { color: #fff; }
+
+  .footer { text-align: center; color: var(--muted); font-size: 11px; padding: 10px 0 30px; }
+  .reset { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 11px; }
+  .pulse { animation: pulse .4s; }
+  @keyframes pulse { 0%{ filter: brightness(1.8);} 100%{ filter: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌲 Aserradero Tycoon</h1>
+  <div class="stat"><span class="label">Dinero</span><span class="value money" id="hMoney">$50</span><span class="sub" id="hUpkeep"></span></div>
+  <div class="stat"><span class="label">Producción</span><span class="value" id="hProd">0/s</span><span class="sub">tablas fabricadas</span></div>
+  <div class="stat"><span class="label">Demanda</span><span class="value" id="hDemand">0/s</span><span class="sub">lo que el mercado pide</span></div>
+  <div class="stat"><span class="label">Ventas</span><span class="value" id="hSales">0/s</span><span class="sub" id="hRevenue"></span></div>
+  <button class="reset" id="reset" style="margin-left:auto">↺ Reiniciar</button>
+</header>
+
+<div class="wrap">
+
+  <!-- IZQUIERDA: produccion -->
+  <div class="card">
+    <h2>Cadena de producción</h2>
+    <p class="desc">Talas árboles → la madera se procesa en tablas → vendes las tablas en el mercado.</p>
+    <div class="chain">
+      <div class="node">
+        <div class="emoji">🌲</div><div class="qty" id="nWood">0</div>
+        <div class="name">Madera</div><div class="rate" id="rWood">+0/s</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="emoji">🪵</div><div class="qty" id="nPlanks">0</div>
+        <div class="name">Tablas</div><div class="rate" id="rPlanks">+0/s</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="emoji">💰</div><div class="qty" id="nSold">0</div>
+        <div class="name">Vendidas</div><div class="rate" id="rSold">+0/s</div>
+      </div>
+    </div>
+    <div class="acts">
+      <button class="act" id="bChop">🪚 Talar<br><small style="font-weight:400" id="bChopAmt">+1 madera</small></button>
+      <button class="act" id="bProcess">🪵 Procesar<br><small style="font-weight:400">madera→tabla</small></button>
+      <button class="act" id="bSell">🤝 Vender<br><small style="font-weight:400">si hay demanda</small></button>
+    </div>
+
+    <div style="margin-top:16px">
+      <h2>💡 Lección en vivo</h2>
+      <div class="lesson" id="lesson">Empieza talando árboles a mano. Pronto verás que el cuello de botella se mueve solo…</div>
+    </div>
+  </div>
+
+  <!-- DERECHA: mercado + tienda -->
+  <div class="card">
+    <h2>Mercado &amp; precio</h2>
+    <p class="desc">Sube el precio para ganar más por tabla… pero menos clientes querrán comprar (elasticidad).</p>
+    <div class="row"><span class="k">Precio por tabla</span><span class="v" id="priceVal">$10</span></div>
+    <input type="range" id="price" min="3" max="40" value="10" step="1" />
+    <div class="row"><span class="k">Demanda a este precio</span><span class="v" id="demandVal">0 /s</span></div>
+    <div class="bar"><span id="demandBar" style="width:0%"></span></div>
+    <div class="row"><span class="k">Pedidos pendientes (clientes esperando)</span><span class="v" id="backlog">0</span></div>
+
+    <div style="margin-top:18px">
+      <div class="tabs">
+        <div class="tab active" data-tab="tools">🔧 Herramientas</div>
+        <div class="tab" data-tab="workers">👷 Equipo</div>
+        <div class="tab" data-tab="mkt">📣 Marketing</div>
+      </div>
+      <div id="shop"></div>
+    </div>
+  </div>
+
+</div>
+<div class="footer">Hecho con fines educativos · producir es fácil, <b>vender es el reto</b> · se guarda solo en este navegador</div>
+
+<script>
+// ---------- Estado ----------
+const SAVE_KEY = "aserradero-tycoon-v1";
+const def = () => ({
+  wood: 0, planks: 0, money: 50, sold: 0,
+  toolLevel: 0,
+  woodcutters: 0, carpenters: 0, sellers: 0,
+  price: 10,
+  demandLevel: 2,          // tablas/seg que pide el mercado a precio de referencia
+  backlog: 0,              // pedidos acumulados esperando ser surtidos
+  mkt: {},                 // marketing comprado
+});
+let s = load();
+
+function load(){
+  try { const r = JSON.parse(localStorage.getItem(SAVE_KEY)); if(r) return Object.assign(def(), r); }
+  catch(e){}
+  return def();
+}
+function save(){ localStorage.setItem(SAVE_KEY, JSON.stringify(s)); }
+
+// ---------- Definiciones del juego ----------
+const REF_PRICE = 10;        // precio de referencia para la curva de demanda
+const ELASTICITY = 1.25;     // qué tan sensibles son los clientes al precio
+
+const TOOLS = [
+  { name: "Serrucho",     ic:"🪚", mult: 1,  cost: 0 },
+  { name: "Sierra manual",ic:"🪚", mult: 3,  cost: 40 },
+  { name: "Motosierra",   ic:"⚙️", mult: 9,  cost: 250 },
+  { name: "Cosechadora",  ic:"🚜", mult: 30, cost: 1500 },
+];
+
+const WORKERS = {
+  woodcutters: { name:"Leñador",   ic:"🧑‍🌾", desc:"Tala madera solo", base:25,  scale:1.18, rate:0.6 },
+  carpenters:  { name:"Carpintero",ic:"🪚",  desc:"Convierte madera→tablas", base:60, scale:1.20, rate:1.0 },
+  sellers:     { name:"Vendedor",  ic:"🧑‍💼", desc:"Surte pedidos automáticamente", base:90, scale:1.22, rate:2.0 },
+};
+
+const MKT = [
+  { id:"volantes",  name:"Volantes",        ic:"📄", desc:"+3 demanda · pago único",        cost:60,   demand:3,  upkeep:0 },
+  { id:"redes",     name:"Redes sociales",  ic:"📱", desc:"+10 demanda · cuesta $1/s",       cost:250,  demand:10, upkeep:1 },
+  { id:"anuncios",  name:"Anuncios pagados",ic:"📺", desc:"+30 demanda · cuesta $5/s",       cost:1000, demand:30, upkeep:5 },
+  { id:"influencer",name:"Influencer",      ic:"⭐", desc:"+80 demanda · cuesta $18/s",      cost:4000, demand:80, upkeep:18 },
+];
+
+// ---------- Cálculos derivados ----------
+function toolMult(){ return TOOLS[s.toolLevel].mult; }
+function chopAmount(){ return toolMult(); }                       // por clic manual
+function woodPerSec(){ return s.woodcutters * WORKERS.woodcutters.rate * toolMult(); }
+function planksPerSec(){ return s.carpenters * WORKERS.carpenters.rate; }
+function sellerCapacity(){ return s.sellers * WORKERS.sellers.rate; } // tablas/seg que pueden surtir
+function upkeep(){ return MKT.reduce((a,m)=> a + (s.mkt[m.id] ? m.upkeep : 0), 0); }
+
+// Curva de demanda: a mayor precio, menos cantidad pedida
+function demandPerSec(){
+  const d = s.demandLevel * Math.pow(REF_PRICE / s.price, ELASTICITY);
+  return Math.max(0, d);
+}
+function workerCost(key){
+  const w = WORKERS[key];
+  return Math.floor(w.base * Math.pow(w.scale, s[key]));
+}
+
+// ---------- Loop ----------
+let last = performance.now();
+function tick(now){
+  const dt = Math.min(0.25, (now - last) / 1000);
+  last = now;
+
+  // 1) Producción de madera (auto)
+  s.wood += woodPerSec() * dt;
+
+  // 2) Procesar madera -> tablas (auto, limitado por madera disponible)
+  const wantProcess = planksPerSec() * dt;
+  const canProcess = Math.min(wantProcess, s.wood);
+  s.wood -= canProcess;
+  s.planks += canProcess;
+
+  // 3) Demanda: se acumulan pedidos (clientes que quieren comprar)
+  const demand = demandPerSec();
+  s.backlog = Math.min(s.backlog + demand * dt, demand * 6 + 3); // el mercado no espera para siempre
+  // recordamos la demanda actual para mostrarla
+  s._demandRate = demand;
+
+  // 4) Venta automática (vendedores) — limitada por inventario Y por pedidos
+  const sellCap = sellerCapacity() * dt;
+  const autoSold = Math.min(s.planks, s.backlog, sellCap);
+  applySale(autoSold);
+  s._salesRate = autoSold / dt;
+
+  // 5) Costos fijos de marketing (upkeep)
+  const cost = upkeep() * dt;
+  if (s.money >= cost){ s.money -= cost; }
+  else { // no alcanza para pagar marketing -> se cancela el más caro
+    s.money = 0;
+    const active = MKT.filter(m=>s.mkt[m.id] && m.upkeep>0).sort((a,b)=>b.upkeep-a.upkeep);
+    if (active.length){ delete s.mkt[active[0].id]; recomputeDemandLevel(); flashLesson(); }
+  }
+
+  render();
+  requestAnimationFrame(tick);
+}
+
+function applySale(amt){
+  if (amt <= 0) return;
+  s.planks -= amt;
+  s.backlog -= amt;
+  s.money += amt * s.price;
+  s.sold += amt;
+}
+
+// demandLevel base = 2 + suma de marketing comprado
+function recomputeDemandLevel(){
+  s.demandLevel = 2 + MKT.reduce((a,m)=> a + (s.mkt[m.id] ? m.demand : 0), 0);
+}
+
+// ---------- Render ----------
+const $ = id => document.getElementById(id);
+const fmt = n => {
+  n = Math.floor(n);
+  if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
+  if (n >= 1e3) return (n/1e3).toFixed(1)+"k";
+  return n.toString();
+};
+const fmt1 = n => (Math.round(n*10)/10).toString();
+
+function render(){
+  $("hMoney").textContent = "$" + fmt(s.money);
+  const up = upkeep();
+  $("hUpkeep").textContent = up > 0 ? `−$${up}/s marketing` : "";
+  $("hProd").textContent = fmt1(planksPerSec()) + "/s";
+  $("hDemand").textContent = fmt1(s._demandRate||0) + "/s";
+  $("hSales").textContent = fmt1(s._salesRate||0) + "/s";
+  $("hRevenue").textContent = "$" + fmt1((s._salesRate||0)*s.price) + "/s";
+
+  $("nWood").textContent = fmt(s.wood);
+  $("nPlanks").textContent = fmt(s.planks);
+  $("nSold").textContent = fmt(s.sold);
+  $("rWood").textContent = "+" + fmt1(woodPerSec()) + "/s";
+  $("rPlanks").textContent = "+" + fmt1(planksPerSec()) + "/s";
+  $("rSold").textContent = "+" + fmt1(s._salesRate||0) + "/s";
+  $("bChopAmt").textContent = "+" + chopAmount() + " madera";
+
+  $("priceVal").textContent = "$" + s.price;
+  const d = s._demandRate || 0;
+  $("demandVal").textContent = fmt1(d) + " /s";
+  $("demandBar").style.width = Math.min(100, d / 1.2) + "%";
+  $("backlog").textContent = fmt(s.backlog);
+
+  renderShop();
+  renderLesson();
+}
+
+// ---------- Tienda ----------
+let curTab = "tools";
+document.querySelectorAll(".tab").forEach(t=>{
+  t.onclick = () => { curTab = t.dataset.tab;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active", x===t));
+    renderShop(); };
+});
+
+function renderShop(){
+  const el = $("shop");
+  let html = "";
+  if (curTab === "tools"){
+    const next = TOOLS[s.toolLevel+1];
+    html += item(TOOLS[s.toolLevel].ic, "Herramienta actual: "+TOOLS[s.toolLevel].name,
+      `Multiplicador de tala ×${toolMult()}`, null, "Equipada");
+    if (next){
+      html += item(next.ic, "Mejorar a "+next.name, `Tala ×${next.mult} (madera por clic y por leñador)`,
+        next.cost, null, ()=>{ if(spend(next.cost)){ s.toolLevel++; } }, "upgradeTool");
+    } else {
+      html += `<div class="item"><div class="ic">🏆</div><div class="info"><div class="t">Máximo nivel de herramienta</div><div class="d">Ya tienes lo mejor para talar</div></div></div>`;
+    }
+  } else if (curTab === "workers"){
+    for (const key in WORKERS){
+      const w = WORKERS[key]; const cost = workerCost(key);
+      let extra;
+      if (key==="woodcutters") extra = `${fmt1(w.rate*toolMult())} madera/s c/u`;
+      else if (key==="carpenters") extra = `${w.rate} tablas/s c/u`;
+      else extra = `${w.rate} ventas/s c/u`;
+      html += item(w.ic, w.name, w.desc+" · "+extra, cost, "Tienes: "+s[key],
+        ()=>{ if(spend(cost)){ s[key]++; } });
+    }
+  } else {
+    for (const m of MKT){
+      const owned = !!s.mkt[m.id];
+      html += item(m.ic, m.name, m.desc, owned?null:m.cost, owned?"✓ Activo":null,
+        owned?null:()=>{ if(spend(m.cost)){ s.mkt[m.id]=true; recomputeDemandLevel(); } });
+    }
+  }
+  el.innerHTML = html;
+  // enlazar botones
+  el.querySelectorAll("[data-buy]").forEach((b,i)=>{ b.onclick = el._cbs[i]; });
+}
+
+let _cbCounter;
+function item(ic, title, desc, cost, owned, cb){
+  // cost null = no comprable; owned = etiqueta derecha
+  const canAfford = cost==null || s.money >= cost;
+  let right;
+  if (cost==null){ right = owned ? `<span class="owned">${owned}</span>` : ""; }
+  else { right = `<button class="buy" data-buy ${canAfford?"":"disabled"}>$${fmt(cost)}</button>`; }
+  // registrar callback
+  if (!item._init){ item._init=true; }
+  return `<div class="item"><div class="ic">${ic}</div>
+    <div class="info"><div class="t">${title}</div><div class="d">${desc}</div>
+    ${owned&&cost!=null?`<div class="owned">${owned}</div>`:""}</div>${right}</div>`;
+}
+// Sobrescribimos renderShop para manejar callbacks de forma simple:
+function renderShopReal(){}
+
+function spend(cost){
+  if (s.money >= cost){ s.money -= cost; save(); return true; }
+  return false;
+}
+
+// Reemplazo limpio de renderShop con manejo de callbacks
+function renderShop(){
+  const el = $("shop");
+  const rows = [];
+  const cbs = [];
+  const push = (ic,title,desc,cost,owned,cb)=>{
+    const canAfford = cost==null || s.money >= cost;
+    let right;
+    if (cost==null) right = owned ? `<span class="owned">${owned}</span>` : "";
+    else right = `<button class="buy" data-i="${cbs.length}" ${canAfford?"":"disabled"}>$${fmt(cost)}</button>`;
+    rows.push(`<div class="item"><div class="ic">${ic}</div>
+      <div class="info"><div class="t">${title}</div><div class="d">${desc}</div>
+      ${owned&&cost!=null?`<div class="owned">${owned}</div>`:""}</div>${right}</div>`);
+    cbs.push(cb||null);
+  };
+
+  if (curTab==="tools"){
+    push(TOOLS[s.toolLevel].ic, "Equipada: "+TOOLS[s.toolLevel].name, `Multiplicador de tala ×${toolMult()}`, null, "Actual");
+    const next = TOOLS[s.toolLevel+1];
+    if (next) push(next.ic, "Mejorar → "+next.name, `Tala ×${next.mult} por clic y por leñador`, next.cost, null,
+      ()=>{ if(spend(next.cost)) s.toolLevel++; });
+    else push("🏆","Máximo nivel","Ya tienes la mejor herramienta", null, "✓");
+  } else if (curTab==="workers"){
+    for (const key in WORKERS){
+      const w = WORKERS[key]; const cost = workerCost(key);
+      let extra = key==="woodcutters" ? `${fmt1(w.rate*toolMult())} mad/s c/u`
+                : key==="carpenters" ? `${w.rate} tablas/s c/u` : `${w.rate} ventas/s c/u`;
+      push(w.ic, `${w.name} (×${s[key]})`, w.desc+" · "+extra, cost, null, ()=>{ if(spend(cost)) s[key]++; });
+    }
+  } else {
+    for (const m of MKT){
+      const owned = !!s.mkt[m.id];
+      push(m.ic, m.name, m.desc, owned?null:m.cost, owned?"✓ Activo":null,
+        owned?null:()=>{ if(spend(m.cost)){ s.mkt[m.id]=true; recomputeDemandLevel(); } });
+    }
+  }
+  el.innerHTML = rows.join("");
+  el.querySelectorAll("button[data-i]").forEach(b=>{
+    b.onclick = () => { const cb = cbs[+b.dataset.i]; if (cb){ cb(); render(); } };
+  });
+}
+
+// ---------- Lección en vivo ----------
+let lessonFlash = 0;
+function flashLesson(){ lessonFlash = 1; }
+function renderLesson(){
+  const el = $("lesson");
+  const demand = s._demandRate || 0;
+  const sales = s._salesRate || 0;
+  const prod = planksPerSec();
+  let cls = "", msg = "";
+
+  if (lessonFlash > 0){
+    lessonFlash = 0;
+    cls = "bad";
+    msg = "💸 <b>Te quedaste sin dinero para pagar el marketing.</b> El marketing recurrente (redes, anuncios) cuesta cada segundo aunque no vendas. Se canceló el más caro y tu demanda bajó.";
+  } else if (s.planks > 60 && demand > 0 && prod > demand * 1.3){
+    cls = "bad";
+    msg = `⚠️ <b>Sobreproducción.</b> Fabricas ${fmt1(prod)}/s pero el mercado solo pide ${fmt1(demand)}/s. Las tablas se acumulan (${fmt(s.planks)}) y NO se convierten en dinero. <b>Automatizar producir no sirve si nadie compra</b> → invierte en 📣 marketing o baja el precio.`;
+  } else if (s.backlog > 8 && s.planks < 2){
+    cls = "good";
+    msg = `📈 <b>Hay demanda insatisfecha:</b> ${fmt(s.backlog)} pedidos esperando y no tienes tablas. Aquí SÍ conviene producir más → mejora la 🔧 herramienta o contrata 🧑‍🌾 leñadores y 🪚 carpinteros.`;
+  } else if (s.sellers === 0 && s.planks > 5){
+    cls = "";
+    msg = `🤝 Tienes tablas pero las vendes a mano. Contrata un <b>Vendedor</b> en la pestaña 👷 Equipo para que surta los pedidos automáticamente.`;
+  } else if (s.price >= 28){
+    cls = "";
+    msg = `💲 Precio alto ($${s.price}): ganas mucho por tabla pero la demanda cae a ${fmt1(demand)}/s. Prueba bajarlo y compara tus <b>ventas $/s</b> arriba — ese es el punto óptimo de la curva.`;
+  } else if (sales > 0 && Math.abs(prod - demand) < demand*0.25){
+    cls = "good";
+    msg = `✅ <b>Equilibrio:</b> produces ≈ lo que el mercado compra (${fmt1(sales)}/s). Para crecer ahora necesitas <b>subir la demanda</b> (marketing) Y la producción a la par.`;
+  } else if (prod === 0 && s.woodcutters === 0){
+    msg = `🌲 Talas a mano. Con el dinero de tus primeras ventas, compra un <b>Leñador</b> para que produzca solo mientras tú piensas en estrategia.`;
+  } else {
+    cls = "good";
+    msg = `🔄 El ciclo: <b>producir → vender → reinvertir → automatizar</b>. Ve moviendo el cuello de botella: a veces falta producción, a veces falta demanda.`;
+  }
+  el.className = "lesson" + (cls?" "+cls:"");
+  el.innerHTML = msg;
+}
+
+// ---------- Acciones manuales ----------
+$("bChop").onclick = () => { s.wood += chopAmount(); render(); };
+$("bProcess").onclick = () => { if (s.wood >= 1){ s.wood -= 1; s.planks += 1; render(); } };
+$("bSell").onclick = () => {
+  const amt = Math.min(s.planks, Math.floor(s.backlog), 5);
+  if (amt > 0){ applySale(amt); render(); }
+};
+$("price").oninput = e => { s.price = +e.target.value; render(); };
+$("price").value = s.price;
+$("reset").onclick = () => { if (confirm("¿Reiniciar el juego desde cero?")){ s = def(); save(); render(); } };
+
+// ---------- Init ----------
+recomputeDemandLevel();
+setInterval(save, 3000);
+window.addEventListener("beforeunload", save);
+render();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
