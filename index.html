@@ -194,7 +194,8 @@ const vendorRate=()=>s.sellers*3;                     // tablas/s que los vended
 // ---- LÍMITES (todo tiene tope; las mejoras los amplían) ----
 const CARRY=[12,20,32,60];                            // mochila según herramienta
 const carryCap=()=>CARRY[s.toolLevel];                // cuánta madera/tablas cargas a la vez
-const millCap=()=>20+s.carpenters*8;                  // tope de entrada y de salida del aserradero
+const millInCap=()=>999;                              // patio de entrada: casi sin tope (se acumula la materia prima)
+const millOutCap=()=>20+s.carpenters*8;               // SALIDA: aquí está el cuello de botella real
 const shelfCap=()=>20+s.sellers*10;                   // tope de la repisa de la tienda
 const beltRate=()=>s.belt*9;                          // tablas/s: banda aserradero → tienda
 const woodBeltRate=()=>s.woodBelt*9;                  // troncos/s: banda bosque → aserradero
@@ -454,19 +455,19 @@ const zones=[
   {type:"storeIn", pos:makePad(8.5,16.8,0x66ff99,"📥 Surte tienda"),  r:2.3},
 ];
 // pilas visibles de cada buffer
-function makeStackPool(x,z,kind,n,baseY){
-  baseY=baseY||0.16; const pool=[];
+function makeStackPool(x,z,kind,n,baseY,cols){
+  baseY=baseY||0.16; cols=cols||3; const pool=[];
   for(let i=0;i<n;i++){
     let m;
     if(kind==="log"){ m=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.95,8),new THREE.MeshStandardMaterial({color:0x7a4a24})); m.rotation.z=Math.PI/2; }
     else { m=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.46),new THREE.MeshStandardMaterial({color:0xc79a5b})); }
-    const col=i%3, row=(i/3)|0;
-    m.position.set(x+(col-1)*0.4, baseY+row*0.22, z);
+    const col=i%cols, row=(i/cols)|0;
+    m.position.set(x+(col-(cols-1)/2)*0.4, baseY+row*0.22, z);
     m.castShadow=true; m.visible=false; scene.add(m); pool.push(m);
   }
   return pool;
 }
-const millInPile=makeStackPool(-15.5,15.2,"log",18);
+const millInPile=makeStackPool(-15.5,15.2,"log",45,0.16,5);   // patio grande: crece mucho
 const millOutPile=makeStackPool(-8.5,15.2,"plank",18);
 // mostrador + repisa de la tienda
 const counter=new THREE.Mesh(new THREE.BoxGeometry(3.4,1.3,1.1),new THREE.MeshStandardMaterial({color:0x8a5a2b}));
@@ -648,13 +649,15 @@ function makeBelt(x0,len,z,kind){
   }
   return {group,items,x0,len,z,off:0};
 }
-function animBelt(b,level,active,dt){
+function animBelt(b,level,dt){
   b.group.visible=level>0;
-  if(level>0){
-    b.off += (active?2.6:0)*dt;
-    const N=Math.min(b.items.length,2+level*2);
-    for(let i=0;i<b.items.length;i++){ const on=i<N&&active; b.items[i].visible=on; if(on){ const t=(b.off+i*(b.len/N))%b.len; b.items[i].position.set(b.x0+t,BELT_Y+0.22,b.z); } }
-  } else for(const p of b.items) p.visible=false;
+  if(level<=0){ for(const p of b.items) p.visible=false; return; }
+  b.off += 2.6*dt;                                  // siempre corriendo (sin parpadeo)
+  const N=Math.min(b.items.length,2+level*2);
+  for(let i=0;i<b.items.length;i++){
+    b.items[i].visible = i<N;
+    if(i<N){ const t=(b.off+i*(b.len/N))%b.len; b.items[i].position.set(b.x0+t,BELT_Y+0.22,b.z); }
+  }
 }
 const woodBelt=makeBelt(-28,13,16.8,"log");      // bosque → aserradero
 const plankBelt=makeBelt(-8,20,17.6,"plank");    // aserradero → tienda
@@ -786,7 +789,7 @@ function loop(){
   if(!helpOpen) for(const z of zones){ if(player.position.distanceTo(z.pos)<z.r){ inZone=z; break; } }
   if(inZone){
     const rate=16*dt;
-    if(inZone.type==="millIn"){ const m=Math.min(s.wood,rate,millCap()-s.millIn); if(m>0){s.wood-=m; s.millIn+=m;} }
+    if(inZone.type==="millIn"){ const m=Math.min(s.wood,rate,millInCap()-s.millIn); if(m>0){s.wood-=m; s.millIn+=m;} }
     else if(inZone.type==="millOut"){ const m=Math.min(s.millOut,rate,carryCap()-s.planks); if(m>0){s.millOut-=m; s.planks+=m;} }
     else if(inZone.type==="storeIn"){ const m=Math.min(s.planks,rate,shelfCap()-s.shelf); if(m>0){s.planks-=m; s.shelf+=m;} }
   }
@@ -801,8 +804,8 @@ function loop(){
   }
   else if(inZone){
     pEl.style.display="block";
-    if(inZone.type==="millIn") pEl.innerHTML = s.millIn>=millCap()?`🚧 <b>Entrada llena</b> (${Math.floor(s.millIn)}/${millCap()}) — la sierra no se da abasto`:(s.wood>0?`📥 Dejando madera… (entrada ${Math.floor(s.millIn)}/${millCap()})`:`📥 Aquí metes la madera (no traes troncos)`);
-    else if(inZone.type==="millOut") pEl.innerHTML = s.millOut>0?`📤 Recogiendo tablas… (salida ${Math.floor(s.millOut)}/${millCap()})`:`📤 Aquí salen las tablas (espera a que corte)`;
+    if(inZone.type==="millIn") pEl.innerHTML = s.wood>0?`📥 Dejando madera en el patio… (entrada: ${Math.floor(s.millIn)})`:`📥 Aquí metes la madera (no traes troncos)`;
+    else if(inZone.type==="millOut") pEl.innerHTML = s.millOut>0?`📤 Recogiendo tablas… (salida ${Math.floor(s.millOut)}/${millOutCap()})`:`📤 Aquí salen las tablas (espera a que corte)`;
     else pEl.innerHTML = s.shelf>=shelfCap()?`🚧 <b>Repisa llena</b> (${Math.floor(s.shelf)}/${shelfCap()})`:(s.planks>0?`📥 Surtiendo la repisa… (${Math.floor(s.shelf)}/${shelfCap()})`:`📥 Trae tablas para surtir (${Math.floor(s.shelf)}/${shelfCap()})`);
   } else pEl.style.display="none";
 
@@ -836,8 +839,8 @@ function loop(){
 
   // ===================== SIMULACIÓN DE NEGOCIO =====================
   salesCount=0;
-  s.millIn = Math.min(millCap(), s.millIn + woodDeliver()*dt);                       // leñadores → input (con tope)
-  const cut=Math.min(millProcRate()*dt, s.millIn, millCap()-s.millOut);              // sierra: corta si hay espacio en la salida
+  s.millIn = Math.min(millInCap(), s.millIn + woodDeliver()*dt);                     // patio de entrada (casi infinito)
+  const cut=Math.min(millProcRate()*dt, s.millIn, millOutCap()-s.millOut);           // la sierra corta si hay espacio en la SALIDA
   s.millIn-=cut; s.millOut+=cut;
   const moveCap = s.belt>0 ? beltRate() : vendorRate();                               // banda reemplaza a los vendedores
   const moved=Math.min(moveCap*dt, s.millOut, shelfCap()-s.shelf);
@@ -875,8 +878,8 @@ function loop(){
   ensureWorkers(); updateWorkers(dt);
   for(let i=0;i<billboards.length;i++) billboards[i].visible=!!s.mkt[MKT[i].id];
   // bandas transportadoras animadas
-  animBelt(woodBelt,  s.woodBelt, s.millIn<millCap(),               dt);
-  animBelt(plankBelt, s.belt,     s.millOut>0.2 && s.shelf<shelfCap(), dt);
+  animBelt(woodBelt,  s.woodBelt, dt);
+  animBelt(plankBelt, s.belt,     dt);
   // partículas de feedback
   for(const f of fx){ if(f.life>0){ f.life-=dt; f.m.position.addScaledVector(f.vel,dt); f.vel.y-=12*dt; if(f.life<=0) f.m.visible=false; } }
 
@@ -980,10 +983,10 @@ function renderLesson(){
   let cls="",msg="";
   if(lessonFlash){ lessonFlash=false; cls="bad";
     msg="💸 <b>Te quedaste sin dinero para el marketing.</b> Los canales recurrentes cuestan cada segundo aunque no vendas; se canceló el más caro y bajó la demanda.";
-  } else if(s.millOut>=millCap()-0.5){ cls="bad";
-    msg=`🚧 <b>Cuello de botella en el aserradero:</b> la salida está llena (${fmt(s.millOut)}/${millCap()}) y la sierra <b>se detiene</b> porque nadie retira las tablas. Recógelas (📤) o contrata 🧑‍💼 Vendedores. <b>Todo tiene un límite</b> — amplíalo con más 🪚 Carpinteros.`;
-  } else if(s.millIn>=millCap()-0.5){ cls="bad";
-    msg=`🚧 <b>Entrada del aserradero llena</b> (${fmt(s.millIn)}/${millCap()}): llega más madera de la que la sierra alcanza a cortar. Sube la capacidad/velocidad con más 🪚 Carpinteros.`;
+  } else if(s.millOut>=millOutCap()-0.5){ cls="bad";
+    msg=`🚧 <b>Cuello de botella en el aserradero:</b> la salida está llena (${fmt(s.millOut)}/${millOutCap()}) y la sierra <b>se detiene</b> porque nadie retira las tablas. Recógelas (📤), pon 🧑‍💼 Vendedores o una 📦 banda. Amplía la salida con más 🪚 Carpinteros.`;
+  } else if(s.millIn>30){ cls="";
+    msg=`🪵 <b>Se acumula materia prima:</b> llega madera más rápido de lo que la sierra corta (${fmt(s.millIn)} en el patio). El cuello de botella es la <b>velocidad de corte</b> → más 🪚 Carpinteros.`;
   } else if(s.wood>=carryCap()){ cls="";
     msg=`🎒 <b>Mochila al tope</b> (${fmt(s.wood)}/${carryCap()}): no puedes cargar más madera. Llévala al aserradero o mejora tu 🔧 herramienta para cargar más.`;
   } else if(s.shelf>=shelfCap()-0.5 && demand>0){ cls="bad";
