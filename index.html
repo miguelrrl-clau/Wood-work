@@ -135,7 +135,7 @@
     <div class="keys">
       <kbd>Arrastrar ratón</kbd><span style="align-self:center;color:var(--muted)">girar cámara · rueda: zoom</span>
     </div>
-    <p>1) <b>Tala</b> árboles (te acercas). 2) Lleva la madera al 🏭 aserradero: <b>📥 déjala</b>, la sierra la corta, y <b>📤 recoge</b> las tablas. 3) Llévalas a la 🏪 tienda y <b>📥 surte la repisa</b>. 4) Los <b>clientes entran 🚪 y compran</b> — pero solo llegan según la <b>demanda</b>.</p>
+    <p>1) <b>Tala</b> árboles (te acercas). 2) Lleva la madera al 🏭 aserradero: <b>📥 déjala</b>, la sierra la corta, y <b>📤 recoge</b> las tablas. 3) Llévalas a la 🏪 tienda y <b>📥 surte la repisa</b>. 4) Los <b>clientes entran 🚪 y compran</b> — pero solo llegan según la <b>demanda</b>. 5) El dinero se apila en la 💰 <b>caja</b>: ve a cobrarlo para que entre a tu cuenta.</p>
     <button id="startBtn">▶ Jugar</button>
   </div>
 </div>
@@ -161,7 +161,7 @@ try {
 const SAVE_KEY = "aserradero-3d-v1";
 const def = () => ({
   wood:0, planks:0, money:50, sold:0, toolLevel:0,
-  millIn:0, millOut:0, shelf:0, belt:0, woodBelt:0,
+  millIn:0, millOut:0, shelf:0, belt:0, woodBelt:0, cash:0,
   woodcutters:0, carpenters:0, sellers:0,
   price:10, demandLevel:2, mkt:{},
 });
@@ -453,6 +453,7 @@ const zones=[
   {type:"millIn",  pos:makePad(-15.5,16.8,0xffb366,"📥 Mete madera"), r:2.3},
   {type:"millOut", pos:makePad(-8.5,16.8,0x66ccff,"📤 Saca tablas"),  r:2.3},
   {type:"storeIn", pos:makePad(8.5,16.8,0x66ff99,"📥 Surte tienda"),  r:2.3},
+  {type:"cash",    pos:makePad(15.6,18.8,0xffd24a,"💰 Cobrar"),       r:2.4},
 ];
 // pilas visibles de cada buffer
 function makeStackPool(x,z,kind,n,baseY,cols){
@@ -484,17 +485,16 @@ function makeArch(x,z){
 makeArch(18,19);
 const doorLabel=textSprite("🚪 Clientes","#cfe8ff"); doorLabel.scale.set(4,1,1); doorLabel.position.set(18,4,19); scene.add(doorLabel);
 // pila de monedas (la "caja" junto a la tienda)
-const coins=[]; for(let i=0;i<24;i++){
+const coins=[];
+for(let i=0;i<40;i++){
   const c=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.06,14),new THREE.MeshStandardMaterial({color:0xffd24a,metalness:.6,roughness:.3}));
-  c.rotation.x=Math.PI/2; c.castShadow=true; c.visible=false; scene.add(c); coins.push(c);
+  c.rotation.x=Math.PI/2; c.castShadow=true; c.visible=false;
+  const col=i%5, layer=(i/5)|0;
+  c.position.set(15.6+(col-2)*0.34, 0.07+layer*0.05, 18.8);
+  scene.add(c); coins.push(c);
 }
-const coinLabel=textSprite("💰 Caja","#ffe9a8"); coinLabel.scale.set(2.8,0.85,1); coinLabel.position.set(15.6,2,18.8); scene.add(coinLabel);
-let coinCount=0;
-function spawnCoin(){
-  const idx=coinCount%coins.length, c=coins[idx];
-  c.position.set(15.6+((idx%5)*0.32-0.6), 0.06+(((idx/5)|0)%4)*0.07, 18.8+((((idx/5)|0))%3)*0.3-0.3);
-  c.visible=true; coinCount++;
-}
+const coinLabel=textSprite("💰 Cobrar","#ffe9a8"); coinLabel.scale.set(2.8,0.85,1); coinLabel.position.set(15.6,2,18.8); scene.add(coinLabel);
+function showCoins(amount){ const n=Math.min(coins.length,Math.ceil(amount/12)); for(let i=0;i<coins.length;i++) coins[i].visible=i<n; }
 // clientes (NPCs)
 const customers=[];
 for(let i=0;i<10;i++){
@@ -792,6 +792,7 @@ function loop(){
     if(inZone.type==="millIn"){ const m=Math.min(s.wood,rate,millInCap()-s.millIn); if(m>0){s.wood-=m; s.millIn+=m;} }
     else if(inZone.type==="millOut"){ const m=Math.min(s.millOut,rate,carryCap()-s.planks); if(m>0){s.millOut-=m; s.planks+=m;} }
     else if(inZone.type==="storeIn"){ const m=Math.min(s.planks,rate,shelfCap()-s.shelf); if(m>0){s.planks-=m; s.shelf+=m;} }
+    else if(inZone.type==="cash"){ const m=Math.min(s.cash,90*dt); if(m>0){ s.cash-=m; s.money+=m; if(Math.random()<0.25) burst(new THREE.Vector3(15.6,1,18.8),0xffd24a,3,2); } }
   }
 
   // --- prompt ---
@@ -806,6 +807,7 @@ function loop(){
     pEl.style.display="block";
     if(inZone.type==="millIn") pEl.innerHTML = s.wood>0?`📥 Dejando madera en el patio… (entrada: ${Math.floor(s.millIn)})`:`📥 Aquí metes la madera (no traes troncos)`;
     else if(inZone.type==="millOut") pEl.innerHTML = s.millOut>0?`📤 Recogiendo tablas… (salida ${Math.floor(s.millOut)}/${millOutCap()})`:`📤 Aquí salen las tablas (espera a que corte)`;
+    else if(inZone.type==="cash") pEl.innerHTML = s.cash>=1?`💰 Cobrando… ($${Math.floor(s.cash)} a tu cuenta)`:`💰 Caja vacía (los clientes dejan aquí el dinero)`;
     else pEl.innerHTML = s.shelf>=shelfCap()?`🚧 <b>Repisa llena</b> (${Math.floor(s.shelf)}/${shelfCap()})`:(s.planks>0?`📥 Surtiendo la repisa… (${Math.floor(s.shelf)}/${shelfCap()})`:`📥 Trae tablas para surtir (${Math.floor(s.shelf)}/${shelfCap()})`);
   } else pEl.style.display="none";
 
@@ -825,7 +827,7 @@ function loop(){
   player.position.y=Math.abs(Math.sin(walkPhase))*0.06*moveAmt;
 
   // --- pilas visibles de los buffers ---
-  showStack(millInPile,s.millIn); showStack(millOutPile,s.millOut); showStack(shelfPile,s.shelf);
+  showStack(millInPile,s.millIn); showStack(millOutPile,s.millOut); showStack(shelfPile,s.shelf); showCoins(s.cash);
 
   // --- sierra del aserradero ---
   const milling = s.millIn>0.05;
@@ -853,7 +855,7 @@ function loop(){
     if(c.phase==="wait"){               // pausa en el mostrador antes de comprar
       c.wait-=dt; c.body.position.y=0.8;
       if(c.wait<=0){
-        if(s.shelf>=1){ s.shelf-=1; s.money+=s.price; s.sold++; salesCount++; spawnCoin();
+        if(s.shelf>=1){ s.shelf-=1; s.cash+=s.price; s.sold++; salesCount++;   // el dinero se queda en la CAJA
           burst(new THREE.Vector3(12,1.7,17.4),0xffd24a,5,2.4);
           if(Math.random()<0.4) popup("+$"+s.price,new THREE.Vector3(12,2.7,17.6),"#7CFC9C"); }
         else lostSales+=1;
@@ -895,7 +897,7 @@ let hudT=0;
 function renderHUD(){
   hudT++; if(hudT%3!==0)return; // throttle DOM
   $("hMoney").textContent="$"+fmt(s.money);
-  const up=upkeep(); $("hUpkeep").textContent=up>0?`−$${up}/s mkt`:"";
+  const up=upkeep(); $("hUpkeep").textContent = s.cash>=1?`💰 $${fmt(s.cash)} por cobrar`:(up>0?`−$${up}/s mkt`:"");
   $("hWood").textContent=fmt(s.wood)+"/"+carryCap();
   $("hPlanks").textContent=fmt(s.planks)+"/"+carryCap();
   $("hShelf").textContent=fmt(s.shelf)+"/"+shelfCap();
