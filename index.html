@@ -161,8 +161,8 @@ try {
 const SAVE_KEY = "aserradero-3d-v1";
 const def = () => ({
   wood:0, planks:0, money:50, sold:0, toolLevel:0,
-  millIn:0, millOut:0, shelf:0, belt:0, woodBelt:0, cash:0,
-  woodcutters:0, carpenters:0, sellers:0,
+  millIn:0, millOut:0, shelf:0, belt:0, cash:0,
+  woodcutters:0, carpenters:0, sellers:0, tractors:0,
   price:10, demandLevel:2, mkt:{},
 });
 let s = (()=>{ try{const r=JSON.parse(localStorage.getItem(SAVE_KEY));if(r)return Object.assign(def(),r);}catch(e){} return def(); })();
@@ -179,6 +179,7 @@ const WORKERS={
   woodcutters:{name:"Leñador",ic:"🧑‍🌾",desc:"Lleva troncos al aserradero solo",base:25,scale:1.18,rate:0.8},
   carpenters:{name:"Carpintero",ic:"🪚",desc:"Acelera el corte y amplía el aserradero",base:60,scale:1.20,rate:2.5},
   sellers:{name:"Vendedor",ic:"🧑‍💼",desc:"Surte la repisa y amplía su capacidad",base:90,scale:1.22,rate:3.0},
+  tractors:{name:"Tractor (operador)",ic:"🚜",desc:"Cosecha árboles y acarrea madera rápido",base:300,scale:1.25,rate:6},
 };
 const MKT=[
   {id:"volantes",name:"Volantes",ic:"📄",desc:"+3 demanda · pago único",cost:60,demand:3,upkeep:0},
@@ -188,7 +189,7 @@ const MKT=[
 ];
 const toolMult=()=>TOOLS[s.toolLevel].mult;
 const chopAmount=()=>toolMult()*5;
-const woodDeliver=()=>s.woodBelt>0 ? s.woodBelt*9 : s.woodcutters*0.8*toolMult();  // banda reemplaza a los leñadores
+const woodDeliver=()=>s.woodcutters*0.8*toolMult() + s.tractors*6;  // leñadores + tractores (operadores con máquina)
 const millProcRate=()=>2.5 + s.carpenters*2.5;        // tablas/s que corta la sierra (input→output)
 const vendorRate=()=>s.sellers*3;                     // tablas/s que los vendedores llevan a la repisa
 // ---- LÍMITES (todo tiene tope; las mejoras los amplían) ----
@@ -197,14 +198,12 @@ const carryCap=()=>CARRY[s.toolLevel];                // cuánta madera/tablas c
 const millInCap=()=>999;                              // patio de entrada: casi sin tope (se acumula la materia prima)
 const millOutCap=()=>20+s.carpenters*8;               // SALIDA: aquí está el cuello de botella real
 const shelfCap=()=>20+s.sellers*10;                   // tope de la repisa de la tienda
-const beltRate=()=>s.belt*9;                          // tablas/s: banda aserradero → tienda
-const woodBeltRate=()=>s.woodBelt*9;                  // troncos/s: banda bosque → aserradero
+const beltRate=()=>s.belt*9;                          // tablas/s: banda aserradero → tienda (solo transporte)
 const MACHINES=[
-  {key:"woodBelt",name:"Banda de madera",ic:"🪵",desc:"Bosque → aserradero · reemplaza a los leñadores",base:350},
-  {key:"belt",    name:"Banda de tablas",ic:"📦",desc:"Aserradero → tienda · reemplaza a los vendedores",base:400},
+  {key:"belt", name:"Banda de tablas",ic:"📦",desc:"Aserradero → tienda · reemplaza a los vendedores",base:400},
 ];
 const machineCost=m=>Math.floor(m.base*Math.pow(2.2,s[m.key]));
-const beltActive=role=> role==="sellers"?s.belt>0 : role==="woodcutters"?s.woodBelt>0 : false;
+const beltActive=role=> role==="sellers" && s.belt>0;   // solo el transporte de producto se automatiza con banda
 const upkeep=()=>MKT.reduce((a,m)=>a+(s.mkt[m.id]?m.upkeep:0),0);
 const demandPerSec=()=>Math.max(0,s.demandLevel*Math.pow(REF_PRICE/s.price,ELASTICITY)); // clientes/s
 const workerCost=k=>Math.floor(WORKERS[k].base*Math.pow(WORKERS[k].scale,s[k]));
@@ -529,10 +528,32 @@ function showStack(pool,amount){ const n=Math.min(pool.length,Math.ceil(amount/2
 let custAccum=0, salesCount=0, lostSales=0;
 
 // ---- trabajadores contratados (NPCs tipo avatar, independientes) ----
-const WCAP={woodcutters:5,carpenters:3,sellers:2};  // máximo de NPCs visibles por rol
+const WCAP={woodcutters:5,carpenters:3,sellers:2,tractors:3};  // máximo de NPCs visibles por rol
 const MILLIN_POS=new THREE.Vector3(-15.5,0,16.8), MILLOUT_POS=new THREE.Vector3(-8.5,0,16.8), STORE_DROP=new THREE.Vector3(10.5,0,16.6);
-const workerNPCs={woodcutters:[],carpenters:[],sellers:[]};
+const workerNPCs={woodcutters:[],carpenters:[],sellers:[],tractors:[]};
+function makeTractor(){
+  const g=new THREE.Group(); const mat=c=>new THREE.MeshStandardMaterial({color:c});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,0.7),mat(0x2e7d32)); body.position.y=0.55; g.add(body);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.45,0.62),mat(0x214d22)); cab.position.set(-0.18,0.97,0); g.add(cab);
+  const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.4,8),mat(0x333333)); pipe.position.set(0.42,1.0,0.22); g.add(pipe);
+  for(const zz of [-0.4,0.4]){
+    const wb=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.18,14),mat(0x1a1a1a)); wb.rotation.x=Math.PI/2; wb.position.set(0.34,0.33,zz); g.add(wb);
+    const wf=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.16,14),mat(0x1a1a1a)); wf.rotation.x=Math.PI/2; wf.position.set(-0.42,0.24,zz); g.add(wf);
+  }
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
 function makeWorker(role,idx){
+  if(role==="tractors"){
+    const g=makeTractor();
+    const item=new THREE.Group();
+    for(let k=0;k<3;k++){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.66,8),new THREE.MeshStandardMaterial({color:0x7a4a24})); p.rotation.z=Math.PI/2; p.position.y=k*0.2; p.castShadow=true; item.add(p); }
+    item.position.set(0.25,0.85,0); item.visible=false; g.add(item);
+    g.visible=false; scene.add(g);
+    const w={g,item,role,state:"seek",tree:null,timer:0,phase:idx*0.7,on:false};
+    g.position.set(-22+(idx-1)*2,0,12);
+    return w;
+  }
   const shirt={woodcutters:0x2e7d32,carpenters:0xb8860b,sellers:0x1565c0}[role];
   const capc ={woodcutters:0x1b5e20,carpenters:0x7a5e14,sellers:0x0d47a1}[role];
   const g=new THREE.Group();
@@ -569,13 +590,14 @@ function makeWorker(role,idx){
 }
 const LEAVE=new THREE.Vector3(-34,0,-28);   // a dónde se van los despedidos
 function resetWorker(w,role,i){
-  w.state=role==="woodcutters"?"seek":role==="sellers"?"toOut":"work"; w.tree=null; w.item.visible=false; w.leaving=false;
+  w.state=(role==="woodcutters"||role==="tractors")?"seek":role==="sellers"?"toOut":"work"; w.tree=null; w.item.visible=false; w.leaving=false;
   if(role==="carpenters") w.g.position.set(-12+(i-2)*1.0,0,14.4+(i%2)*0.8);
   else if(role==="sellers") w.g.position.set(-8.5+(i-2)*0.5,0,16.8);
+  else if(role==="tractors") w.g.position.set(-22+(i-1)*2,0,12);
   else w.g.position.set(-20+(i-2)*1.5,0,21);
 }
 function ensureWorkers(){
-  for(const role of ["woodcutters","carpenters","sellers"]){
+  for(const role of ["woodcutters","carpenters","sellers","tractors"]){
     const arr=workerNPCs[role], want=beltActive(role)?0:Math.min(WCAP[role],s[role]);  // banda = 0 humanos
     while(arr.length<want) arr.push(makeWorker(role,arr.length));
     for(let i=0;i<arr.length;i++){
@@ -590,9 +612,9 @@ function walkNPC(w,tx,tz,speed,dt){
   const dx=tx-w.g.position.x, dz=tz-w.g.position.z, d=Math.hypot(dx,dz);
   if(d>0.12){
     w.g.position.x+=dx/d*speed*dt; w.g.position.z+=dz/d*speed*dt; w.g.rotation.y=Math.atan2(dx,dz);
-    w.phase+=dt*9; const sw=Math.sin(w.phase)*0.5;
-    w.ll.rotation.x=sw; w.rl.rotation.x=-sw; w.la.rotation.x=-sw*0.7; w.ra.rotation.x=sw*0.7;
-  } else { w.ll.rotation.x*=0.8; w.rl.rotation.x*=0.8; w.la.rotation.x*=0.8; w.ra.rotation.x*=0.8; }
+    if(w.ll){ w.phase+=dt*9; const sw=Math.sin(w.phase)*0.5; w.ll.rotation.x=sw; w.rl.rotation.x=-sw; w.la.rotation.x=-sw*0.7; w.ra.rotation.x=sw*0.7; }
+    else w.phase+=dt*3;   // vehículo (tractor): sin piernas
+  } else if(w.ll){ w.ll.rotation.x*=0.8; w.rl.rotation.x*=0.8; w.la.rotation.x*=0.8; w.ra.rotation.x*=0.8; }
   return d;
 }
 function updateWorkers(dt){
@@ -615,6 +637,20 @@ function updateWorkers(dt){
       }
     } else { // haul: llevar el tronco al input del aserradero
       if(walkNPC(w,MILLIN_POS.x,MILLIN_POS.z,3.4,dt)<2.0){ w.item.visible=false; w.tree=null; w.state="seek"; }
+    }
+  }
+  // TRACTORES (operadores): cosechan árboles y acarrean madera — más rápido que a pie
+  for(const w of workerNPCs.tractors){
+    if(!w.on)continue;
+    if(w.state==="seek"){
+      if(!w.tree || !w.tree.userData.alive) w.tree = alive.length? alive[(w.g.id+Math.floor(w.phase))%alive.length] : null;
+      if(!w.tree){ continue; }
+      if(walkNPC(w,w.tree.position.x,w.tree.position.z,5.0,dt)<2.6){ w.state="chop"; w.timer=0; }
+    } else if(w.state==="chop"){
+      w.timer+=dt;
+      if(w.timer>0.7){ if(w.tree && w.tree.userData.alive){ w.tree.userData.alive=false; w.tree.userData.regrowAt=tAccum+12; burst(w.tree.position.clone().add(new THREE.Vector3(0,1.6,0)),0x9c6b3f,10,4.5); } w.item.visible=true; w.state="haul"; }
+    } else {
+      if(walkNPC(w,MILLIN_POS.x,MILLIN_POS.z,5.0,dt)<2.2){ w.item.visible=false; w.tree=null; w.state="seek"; }
     }
   }
   // VENDEDORES: recoger tablas de la salida → llevarlas a la repisa
@@ -672,8 +708,7 @@ function animBelt(b,level,dt){
     if(i<N){ const t=(b.off+i*(b.len/N))%b.len; b.items[i].position.set(b.x0+t,BELT_Y+0.22,b.z); }
   }
 }
-const woodBelt=makeBelt(-28,13,16.8,"log");      // bosque → aserradero
-const plankBelt=makeBelt(-8,20,17.6,"plank");    // aserradero → tienda
+const plankBelt=makeBelt(-8,20,17.6,"plank");    // aserradero → tienda (solo transporte de producto)
 
 // ---- SPOTS DE COMPRA EN EL PISO (te paras encima y compras) ----
 function dynSprite(){
@@ -692,6 +727,7 @@ function dynSprite(){
   return sp;
 }
 function makeBuyModel(id){
+  if(id==="tractors") return makeTractor();
   const g=new THREE.Group();
   const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c},o||{}));
   if(id==="tool"){
@@ -724,8 +760,8 @@ const BUYS=[
   {x:-23,z:11,   id:"woodcutters", label:"🧑‍🌾 Leñador",    price:()=>workerCost("woodcutters"), apply:()=>s.woodcutters++},
   {x:-17,z:9,    id:"carpenters",  label:"🏭 +Aserradero",  price:()=>workerCost("carpenters"),  apply:()=>s.carpenters++},
   {x:17, z:9,    id:"sellers",     label:"🏪 +Tienda",      price:()=>workerCost("sellers"),     apply:()=>s.sellers++},
-  {x:-19,z:19.5, id:"woodBelt",    label:"🪵 Banda madera", price:()=>machineCost(MACHINES[0]),  apply:()=>s.woodBelt++},
-  {x:3,  z:20.5, id:"belt",        label:"📦 Banda tablas", price:()=>machineCost(MACHINES[1]),  apply:()=>s.belt++},
+  {x:-22,z:13,   id:"tractors",    label:"🚜 Tractor",      price:()=>workerCost("tractors"),    apply:()=>s.tractors++},
+  {x:3,  z:20.5, id:"belt",        label:"📦 Banda tablas", price:()=>machineCost(MACHINES[0]),  apply:()=>s.belt++},
 ];
 for(const n of BUYS){
   const ring=new THREE.Mesh(new THREE.RingGeometry(0.9,1.3,24),new THREE.MeshBasicMaterial({color:0xffe082,side:THREE.DoubleSide,transparent:true,opacity:.85}));
@@ -977,8 +1013,7 @@ function loop(){
   ensureWorkers(); updateWorkers(dt); updateBuys(dt);
   for(let i=0;i<billboards.length;i++) billboards[i].visible=!!s.mkt[MKT[i].id];
   // bandas transportadoras animadas
-  animBelt(woodBelt,  s.woodBelt, dt);
-  animBelt(plankBelt, s.belt,     dt);
+  animBelt(plankBelt, s.belt, dt);
   // partículas de feedback
   for(const f of fx){ if(f.life>0){ f.life-=dt; f.m.position.addScaledVector(f.vel,dt); f.vel.y-=12*dt; if(f.life<=0) f.m.visible=false; } }
 
@@ -1045,7 +1080,7 @@ function renderShopItems(){
   html="";
   for(const k in WORKERS){
     const w=WORKERS[k],c=workerCost(k);
-    const extra=k==="woodcutters"?`${fmt1(0.8*toolMult())} troncos/s c/u`:k==="carpenters"?`+2.5 tablas/s corte`:`3 a repisa/s c/u`;
+    const extra=k==="woodcutters"?`${fmt1(0.8*toolMult())} troncos/s c/u`:k==="carpenters"?`+2.5 tablas/s corte`:k==="tractors"?`6 troncos/s c/u`:`3 a repisa/s c/u`;
     html+=itemHTML(w.ic,`${w.name} (×${s[k]})`,`${w.desc} · ${extra}`,c,null);
   }
   $("shopWorkers").innerHTML=html;
