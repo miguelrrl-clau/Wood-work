@@ -297,16 +297,30 @@ function makeBuilding(x,z,color,roofColor,label){
 }
 const mill=makeBuilding(-12,12,0x9c6b3f,0x7a3b2a,"Aserradero");
 dirtPatch(-12,12,7);
-// sierra del aserradero (proceso de corte visible)
-const sawTable=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.4,1.2),new THREE.MeshStandardMaterial({color:0x5a3a1f}));
-sawTable.position.set(-12,1.0,15.7); sawTable.castShadow=true; scene.add(sawTable);
-const sawLog=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,2.2,10),new THREE.MeshStandardMaterial({color:0x7a4a24}));
-sawLog.rotation.z=Math.PI/2; sawLog.position.set(-12,1.45,15.7); sawLog.castShadow=true; scene.add(sawLog);
-const sawPivot=new THREE.Group(); sawPivot.position.set(-12,1.75,15.7); sawPivot.rotation.x=Math.PI/2; scene.add(sawPivot);
-const sawBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.05,28),
-  new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:.8,roughness:.2})); sawPivot.add(sawBlade);
+// === sierra del aserradero (proceso de corte visible) ===
+const SAW_X=-12, SAW_Z=15.7;
+// banco/mesa con rieles del carro
+const sawTable=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.4,1.2),new THREE.MeshStandardMaterial({color:0x5a3a1f}));
+sawTable.position.set(SAW_X,1.0,SAW_Z); sawTable.castShadow=true; sawTable.receiveShadow=true; scene.add(sawTable);
+for(const zz of [-0.35,0.35]){ const rail=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.08,0.08),new THREE.MeshStandardMaterial({color:0x3a2616})); rail.position.set(SAW_X,1.24,SAW_Z+zz); scene.add(rail); }
+// tronco en el carro que avanza hacia la sierra
+const sawLog=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,1.7,12),new THREE.MeshStandardMaterial({color:0x7a4a24}));
+sawLog.rotation.z=Math.PI/2; sawLog.position.set(SAW_X-1.6,1.5,SAW_Z); sawLog.castShadow=true; scene.add(sawLog);
+// bastidor + disco vertical (su plano contiene el avance del tronco, como un aserradero real)
+const sawFrame=new THREE.Group(); sawFrame.position.set(SAW_X,0,SAW_Z); scene.add(sawFrame);
+for(const xx of [-0.5,0.5]){ const post=new THREE.Mesh(new THREE.BoxGeometry(0.12,2.2,0.12),new THREE.MeshStandardMaterial({color:0x2c3e50})); post.position.set(xx,1.6,0); post.castShadow=true; sawFrame.add(post); }
+const sawTop=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.14),new THREE.MeshStandardMaterial({color:0x2c3e50})); sawTop.position.set(0,2.7,0); sawFrame.add(sawTop);
+const sawPivot=new THREE.Group(); sawPivot.position.set(SAW_X,1.6,SAW_Z); scene.add(sawPivot);  // disco vertical, gira en el plano XY
+const sawBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.05,32),
+  new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:.85,roughness:.18})); sawBlade.rotation.x=Math.PI/2; sawPivot.add(sawBlade);
+for(let i=0;i<16;i++){ const tooth=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.05),new THREE.MeshStandardMaterial({color:0x9aa6ad,metalness:.8})); const a=i/16*Math.PI*2; tooth.position.set(Math.cos(a)*0.9,Math.sin(a)*0.9,0); tooth.rotation.z=a; sawPivot.add(tooth); }
+// tablas que salen por el otro lado
+const outPlanks=[];
+for(let i=0;i<3;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.09,0.34),new THREE.MeshStandardMaterial({color:0xc79a5b})); p.castShadow=true; p.visible=false; p.position.set(SAW_X,1.4+(i-1)*0.12,SAW_Z); scene.add(p); outPlanks.push(p); }
+let cutT=0;
+// aserrín
 const chips=[];
-for(let i=0;i<16;i++){
+for(let i=0;i<18;i++){
   const c=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),new THREE.MeshStandardMaterial({color:0xe0bd86}));
   c.visible=false; scene.add(c); chips.push({m:c,life:0,vel:new THREE.Vector3()});
 }
@@ -775,22 +789,28 @@ for(const n of BUYS){
 function updateBuys(dt){
   for(const n of BUYS){
     const price=n.price();
-    const near = !helpOpen && Math.hypot(player.position.x-n.x, player.position.z-n.z)<1.7;
-    const afford = price!=null && s.money>=price;
-    const keyStr = price==null?"MAX":(price+"|"+afford);
-    if(keyStr!==n.shown){ n.shown=keyStr;
-      if(price==null) n.sprite.userData.draw(n.label,"MAX","#ffd24a");
-      else n.sprite.userData.draw(n.label,"$"+fmt(price),afford?"#7CFC9C":"#ff8a8a");
+    // llegó al máximo (p.ej. la sierra) → desaparece el spot
+    if(price==null){
+      if(!n.maxed){ n.maxed=true; n.ring.visible=false; n.model.visible=false; n.sprite.visible=false; burst(new THREE.Vector3(n.x,1,n.z),0xffd24a,12,3.2); }
+      continue;
     }
+    const near = !helpOpen && Math.hypot(player.position.x-n.x, player.position.z-n.z)<1.7;
+    const afford = s.money>=price;
+    const keyStr=price+"|"+afford;
+    if(keyStr!==n.shown){ n.shown=keyStr; n.sprite.userData.draw(n.label,"$"+fmt(price),afford?"#7CFC9C":"#ff8a8a"); }
     n.sprite.position.y=2.5+Math.sin(tAccum*2+n.x)*0.08;
-    n.ring.material.opacity = near?1:0.8;
-    n.model.rotation.y += dt*0.8;
-    n.model.position.y = 0.6+Math.sin(tAccum*2+n.x)*0.08;
-    const tsc=(price==null?0.6:1)*(near?1.18:1); n.model.scale.setScalar(n.model.scale.x+(tsc-n.model.scale.x)*Math.min(1,dt*8));
-    if(near && afford){
-      n.t+=dt;
-      if(n.t>=0.5){ n.t=0; if(spend(price)){ n.apply(); burst(new THREE.Vector3(n.x,1,n.z),0x7CFC9C,8,3); popup("✓ comprado",new THREE.Vector3(n.x,2.7,n.z),"#7CFC9C"); if(shopEl.classList.contains("open")) renderShop(); } }
-    } else n.t=0;
+    n.ring.material.opacity=near?1:0.8;
+    n.model.rotation.y+=dt*0.8; n.model.position.y=0.6+Math.sin(tAccum*2+n.x)*0.08;
+    n.pop=Math.max(0,(n.pop||0)-dt);
+    const target=(near?1.16:1)*(1+(n.pop||0)*1.3);
+    n.model.scale.setScalar(n.model.scale.x+(target-n.model.scale.x)*Math.min(1,dt*12));
+    // comprar UNA vez por entrada (sales del aro y vuelves para comprar otra)
+    if(near && afford && !n.bought){
+      n.bought=true; if(spend(price)){ n.apply(); n.pop=0.5;
+        burst(new THREE.Vector3(n.x,1.1,n.z),0x7CFC9C,12,3.4); popup("✓ comprado",new THREE.Vector3(n.x,2.8,n.z),"#7CFC9C");
+        if(shopEl.classList.contains("open")) renderShop(); }
+    }
+    if(!near) n.bought=false;   // al alejarte, el aro se rearma
   }
 }
 
@@ -964,11 +984,21 @@ function loop(){
 
   // --- sierra del aserradero ---
   const milling = s.millIn>0.05;
-  sawSpin += (milling?30:2)*dt; sawBlade.rotation.y=sawSpin;
+  sawSpin += (milling?34:3)*dt; sawPivot.rotation.z=sawSpin;
+  if(milling) cutT += dt*1.3;
+  if(cutT>=2) cutT-=2;
+  if(cutT<1){                                  // el tronco avanza hacia el disco
+    sawLog.visible=true; sawLog.position.x=(SAW_X-1.6)+cutT*1.6;
+    for(const p of outPlanks) p.visible=false;
+  } else {                                     // salen las tablas por el otro lado
+    sawLog.visible=false;
+    const k=cutT-1;
+    for(let i=0;i<outPlanks.length;i++){ outPlanks[i].visible=true; outPlanks[i].position.x=SAW_X+k*2.2; }
+  }
   for(const ch of chips){
     if(ch.life>0){ ch.life-=dt; ch.m.position.addScaledVector(ch.vel,dt); ch.vel.y-=10*dt; if(ch.life<=0) ch.m.visible=false; }
-    else if(milling && Math.random()<0.5){ ch.life=0.5; ch.m.visible=true;
-      ch.m.position.set(-12+(Math.random()-0.5)*0.4,1.75,15.7+(Math.random()-0.5)*0.4);
+    else if(milling && cutT<1.1 && Math.random()<0.6){ ch.life=0.5; ch.m.visible=true;
+      ch.m.position.set(SAW_X+(Math.random()-0.5)*0.3,1.7,SAW_Z+(Math.random()-0.5)*0.4);
       ch.vel.set((Math.random()-0.5)*3,2+Math.random()*2.5,(Math.random()-0.5)*3); }
   }
 
