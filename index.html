@@ -691,20 +691,50 @@ function dynSprite(){
   };
   return sp;
 }
+function makeBuyModel(id){
+  const g=new THREE.Group();
+  const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c},o||{}));
+  if(id==="tool"){
+    const stand=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.25,0.4),M(0x5a3a1f)); stand.position.y=0.12; g.add(stand);
+    const blade=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.04,20),M(0xcfd8dc,{metalness:.8,roughness:.2}));
+    blade.rotation.x=Math.PI/2; blade.position.y=0.42; g.add(blade);
+  } else if(id==="woodcutters"){
+    const log=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.8,10),M(0x7a4a24)); log.rotation.z=Math.PI/2; log.position.y=0.22; g.add(log);
+    const handle=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.6,0.05),M(0x6b4423)); handle.position.set(0,0.55,0); handle.rotation.z=0.5; g.add(handle);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.22,0.26),M(0xb0bec5,{metalness:.6})); head.position.set(0.18,0.78,0); head.rotation.z=0.5; g.add(head);
+  } else if(id==="carpenters"){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.5,0.7),M(0x9c6b3f)); base.position.y=0.25; g.add(base);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(0.68,0.36,4),M(0x7a3b2a)); roof.position.y=0.68; roof.rotation.y=Math.PI/4; g.add(roof);
+  } else if(id==="sellers"){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.5,0.7),M(0xc99a3f)); base.position.y=0.25; g.add(base);
+    const awn=new THREE.Mesh(new THREE.BoxGeometry(0.98,0.12,0.42),M(0xd64545)); awn.position.set(0,0.56,0.32); g.add(awn);
+  } else { // bandas
+    const belt=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.12,0.4),M(0x2b3138)); belt.position.y=0.3; g.add(belt);
+    for(const ex of [-0.45,0.45]){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.42,10),M(0x888888,{metalness:.4})); r.rotation.x=Math.PI/2; r.position.set(ex,0.3,0); g.add(r); }
+    let top;
+    if(id==="woodBelt"){ top=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.5,8),M(0x7a4a24)); top.rotation.z=Math.PI/2; }
+    else { top=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.1,0.32),M(0xc79a5b)); }
+    top.position.y=0.42; g.add(top);
+  }
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
 const BUYS=[
-  {x:4,  z:5,    label:"🪚 Sierra mejor", price:()=> s.toolLevel<TOOLS.length-1?TOOLS[s.toolLevel+1].cost:null, apply:()=>s.toolLevel++},
-  {x:-23,z:11,   label:"🧑‍🌾 Leñador",    price:()=>workerCost("woodcutters"), apply:()=>s.woodcutters++},
-  {x:-17,z:9,    label:"🏭 +Aserradero",  price:()=>workerCost("carpenters"),  apply:()=>s.carpenters++},
-  {x:17, z:9,    label:"🏪 +Tienda",      price:()=>workerCost("sellers"),     apply:()=>s.sellers++},
-  {x:-19,z:19.5, label:"🪵 Banda madera", price:()=>machineCost(MACHINES[0]),  apply:()=>s.woodBelt++},
-  {x:3,  z:20.5, label:"📦 Banda tablas", price:()=>machineCost(MACHINES[1]),  apply:()=>s.belt++},
+  {x:4,  z:5,    id:"tool",        label:"🪚 Sierra mejor", price:()=> s.toolLevel<TOOLS.length-1?TOOLS[s.toolLevel+1].cost:null, apply:()=>s.toolLevel++},
+  {x:-23,z:11,   id:"woodcutters", label:"🧑‍🌾 Leñador",    price:()=>workerCost("woodcutters"), apply:()=>s.woodcutters++},
+  {x:-17,z:9,    id:"carpenters",  label:"🏭 +Aserradero",  price:()=>workerCost("carpenters"),  apply:()=>s.carpenters++},
+  {x:17, z:9,    id:"sellers",     label:"🏪 +Tienda",      price:()=>workerCost("sellers"),     apply:()=>s.sellers++},
+  {x:-19,z:19.5, id:"woodBelt",    label:"🪵 Banda madera", price:()=>machineCost(MACHINES[0]),  apply:()=>s.woodBelt++},
+  {x:3,  z:20.5, id:"belt",        label:"📦 Banda tablas", price:()=>machineCost(MACHINES[1]),  apply:()=>s.belt++},
 ];
 for(const n of BUYS){
   const ring=new THREE.Mesh(new THREE.RingGeometry(0.9,1.3,24),new THREE.MeshBasicMaterial({color:0xffe082,side:THREE.DoubleSide,transparent:true,opacity:.85}));
   ring.rotation.x=-Math.PI/2; ring.position.set(n.x,0.06,n.z); scene.add(ring);
   const fill=new THREE.Mesh(new THREE.CircleGeometry(0.9,24),new THREE.MeshBasicMaterial({color:0xffe082,transparent:true,opacity:.18}));
   fill.rotation.x=-Math.PI/2; fill.position.set(n.x,0.05,n.z); scene.add(fill);
-  n.ring=ring; n.sprite=dynSprite(); n.sprite.position.set(n.x,2.3,n.z); scene.add(n.sprite); n.shown=null; n.t=0;
+  n.ring=ring;
+  n.model=makeBuyModel(n.id); n.model.position.set(n.x,0.6,n.z); scene.add(n.model);
+  n.sprite=dynSprite(); n.sprite.position.set(n.x,2.5,n.z); scene.add(n.sprite); n.shown=null; n.t=0;
 }
 function updateBuys(dt){
   for(const n of BUYS){
@@ -716,8 +746,11 @@ function updateBuys(dt){
       if(price==null) n.sprite.userData.draw(n.label,"MAX","#ffd24a");
       else n.sprite.userData.draw(n.label,"$"+fmt(price),afford?"#7CFC9C":"#ff8a8a");
     }
-    n.sprite.position.y=2.3+Math.sin(tAccum*2+n.x)*0.08;
+    n.sprite.position.y=2.5+Math.sin(tAccum*2+n.x)*0.08;
     n.ring.material.opacity = near?1:0.8;
+    n.model.rotation.y += dt*0.8;
+    n.model.position.y = 0.6+Math.sin(tAccum*2+n.x)*0.08;
+    const tsc=(price==null?0.6:1)*(near?1.18:1); n.model.scale.setScalar(n.model.scale.x+(tsc-n.model.scale.x)*Math.min(1,dt*8));
     if(near && afford){
       n.t+=dt;
       if(n.t>=0.5){ n.t=0; if(spend(price)){ n.apply(); burst(new THREE.Vector3(n.x,1,n.z),0x7CFC9C,8,3); popup("✓ comprado",new THREE.Vector3(n.x,2.7,n.z),"#7CFC9C"); if(shopEl.classList.contains("open")) renderShop(); } }
