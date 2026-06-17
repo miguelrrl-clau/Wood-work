@@ -104,6 +104,7 @@
 
 <div class="ui" id="buttons">
   <button class="fbtn" id="openShop">🏪 Tienda</button>
+  <button class="fbtn" id="muteBtn">🔊 Sonido</button>
   <button class="fbtn" id="helpBtn">❔ Controles</button>
 </div>
 
@@ -189,7 +190,7 @@ const MKT=[
 ];
 const toolMult=()=>TOOLS[s.toolLevel].mult;
 const chopAmount=()=>toolMult()*5;
-const woodDeliver=()=>s.woodcutters*0.8*toolMult() + s.tractors*6;  // leñadores + tractores (operadores con máquina)
+const woodDeliver=()=> (harvesterTier()?0:s.woodcutters*0.8*toolMult()) + s.tractors*6;  // leñadores (hasta la cosechadora) + tractores
 const millProcRate=()=>2.5 + s.carpenters*2.5;        // tablas/s que corta la sierra (input→output)
 const vendorRate=()=>s.sellers*3;                     // tablas/s que los vendedores llevan a la repisa
 // ---- LÍMITES (todo tiene tope; las mejoras los amplían) ----
@@ -203,7 +204,8 @@ const MACHINES=[
   {key:"belt", name:"Banda de tablas",ic:"📦",desc:"Aserradero → tienda · reemplaza a los vendedores",base:400},
 ];
 const machineCost=m=>Math.floor(m.base*Math.pow(2.2,s[m.key]));
-const beltActive=role=> role==="sellers" && s.belt>0;   // solo el transporte de producto se automatiza con banda
+const harvesterTier=()=>s.tractors>=3;                  // con ≥3 tractores ya es cosechadora (quita leñadores)
+const roleReplaced=role=> (role==="sellers"&&s.belt>0) || (role==="woodcutters"&&harvesterTier());
 const upkeep=()=>MKT.reduce((a,m)=>a+(s.mkt[m.id]?m.upkeep:0),0);
 const demandPerSec=()=>Math.max(0,s.demandLevel*Math.pow(REF_PRICE/s.price,ELASTICITY)); // clientes/s
 const workerCost=k=>Math.floor(WORKERS[k].base*Math.pow(WORKERS[k].scale,s[k]));
@@ -316,7 +318,7 @@ const sawBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.05,32),
 for(let i=0;i<16;i++){ const tooth=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.05),new THREE.MeshStandardMaterial({color:0x9aa6ad,metalness:.8})); const a=i/16*Math.PI*2; tooth.position.set(Math.cos(a)*0.9,Math.sin(a)*0.9,0); tooth.rotation.z=a; sawPivot.add(tooth); }
 // tablas que salen por el otro lado
 const outPlanks=[];
-for(let i=0;i<3;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.09,0.34),new THREE.MeshStandardMaterial({color:0xc79a5b})); p.castShadow=true; p.visible=false; p.position.set(SAW_X,1.4+(i-1)*0.12,SAW_Z); scene.add(p); outPlanks.push(p); }
+for(let i=0;i<6;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.08,0.3),new THREE.MeshStandardMaterial({color:0xc79a5b})); p.castShadow=true; p.visible=false; p.position.set(SAW_X,1.32+(i%3)*0.11,SAW_Z+(i<3?-0.18:0.18)); scene.add(p); outPlanks.push(p); }
 let cutT=0;
 // aserrín
 const chips=[];
@@ -324,7 +326,11 @@ for(let i=0;i<18;i++){
   const c=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),new THREE.MeshStandardMaterial({color:0xe0bd86}));
   c.visible=false; scene.add(c); chips.push({m:c,life:0,vel:new THREE.Vector3()});
 }
-let sawSpin=0;
+let sawSpin=0, sawCutFlag=false;
+// segundo disco (aparece al subir el aserradero / carpinteros)
+const sawPivot2=new THREE.Group(); sawPivot2.position.set(SAW_X,1.6,SAW_Z+0.45); sawPivot2.visible=false; scene.add(sawPivot2);
+const sawBlade2=new THREE.Mesh(new THREE.CylinderGeometry(0.72,0.72,0.05,28),new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:.85,roughness:.18}));
+sawBlade2.rotation.x=Math.PI/2; sawBlade2.castShadow=true; sawPivot2.add(sawBlade2);
 // partículas genéricas (feedback jugoso): astillas al talar, brillo al vender, etc.
 const fx=[];
 for(let i=0;i<48;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),new THREE.MeshStandardMaterial({color:0xffffff})); m.visible=false; scene.add(m); fx.push({m,life:0,vel:new THREE.Vector3()}); }
@@ -341,6 +347,26 @@ dirtPatch(12,12,7);
 // toldo de mercado
 const awning=new THREE.Mesh(new THREE.BoxGeometry(8,0.4,3),new THREE.MeshStandardMaterial({color:0xd64545}));
 awning.position.set(12,4.2,15.5); awning.castShadow=true; scene.add(awning);
+
+// ===== EVOLUCIÓN VISUAL: mejoras que aparecen al subir de nivel =====
+const evolveParts=[];   // {mesh, on:()=>bool}
+const addEvolve=(mesh,onFn)=>{ mesh.visible=false; evolveParts.push({mesh,on:onFn}); };
+const Em=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c},o||{}));
+// --- ASERRADERO (carpinteros): chimenea, ático, segundo disco, antena ---
+const millChimney=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.35,1.6,10),Em(0x6b4a2a)); millChimney.position.set(-10.2,5.4,10.5); millChimney.castShadow=true; scene.add(millChimney); addEvolve(millChimney,()=>s.carpenters>=1);
+const millAttic=new THREE.Group();
+const atticBox=new THREE.Mesh(new THREE.BoxGeometry(4.4,1.6,3.6),Em(0xb07c4a)); atticBox.position.y=6.0; millAttic.add(atticBox);
+const atticRoof=new THREE.Mesh(new THREE.ConeGeometry(3.6,1.7,4),Em(0x7a3b2a)); atticRoof.position.y=7.6; atticRoof.rotation.y=Math.PI/4; millAttic.add(atticRoof);
+millAttic.position.set(-12,0,12); millAttic.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(millAttic); addEvolve(millAttic,()=>s.carpenters>=3);
+addEvolve(sawPivot2,()=>s.carpenters>=2);
+// --- TIENDA (vendedores): letrero, segundo toldo, banderines, segundo piso ---
+const shopSign=textSprite("🏪 TIENDA","#fff3c4"); shopSign.scale.set(4.2,1.05,1); shopSign.position.set(12,5.6,15.4); scene.add(shopSign); addEvolve(shopSign,()=>s.sellers>=1);
+const awning2=new THREE.Mesh(new THREE.BoxGeometry(8,0.35,1.4),Em(0xffffff)); awning2.position.set(12,3.6,16.6); awning2.castShadow=true; scene.add(awning2); addEvolve(awning2,()=>s.sellers>=2);
+const shopFloor2=new THREE.Group();
+const f2=new THREE.Mesh(new THREE.BoxGeometry(6.6,2.2,5.6),Em(0xe0b85a)); f2.position.y=5.1; shopFloor2.add(f2);
+const f2roof=new THREE.Mesh(new THREE.ConeGeometry(5.2,2.0,4),Em(0x2a5a7a)); f2roof.position.y=7.1; f2roof.rotation.y=Math.PI/4; shopFloor2.add(f2roof);
+shopFloor2.position.set(12,0,12); shopFloor2.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(shopFloor2); addEvolve(shopFloor2,()=>s.sellers>=3);
+function updateEvolutions(){ for(const e of evolveParts) e.mesh.visible=e.on(); }
 
 // letreros flotantes (sprites de texto)
 function textSprite(text,color="#ffffff"){
@@ -554,6 +580,13 @@ function makeTractor(){
     const wb=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.18,14),mat(0x1a1a1a)); wb.rotation.x=Math.PI/2; wb.position.set(0.34,0.33,zz); g.add(wb);
     const wf=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.16,14),mat(0x1a1a1a)); wf.rotation.x=Math.PI/2; wf.position.set(-0.42,0.24,zz); g.add(wf);
   }
+  // partes de COSECHADORA (brazo + cabezal cortador), ocultas hasta que evoluciona
+  const harv=[];
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.14,0.14),mat(0xf1c40f)); arm.position.set(0.7,1.0,0); arm.rotation.z=-0.35; g.add(arm); harv.push(arm);
+  const housing=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.42,0.52),mat(0xd35400)); housing.position.set(1.18,0.78,0); g.add(housing); harv.push(housing);
+  const headBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.05,16),mat(0xcfd8dc)); headBlade.rotation.x=Math.PI/2; headBlade.position.set(1.18,0.5,0); g.add(headBlade); harv.push(headBlade);
+  for(const m of harv) m.visible=false;
+  g.userData.harv=harv; g.userData.headBlade=headBlade;
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   return g;
 }
@@ -564,6 +597,7 @@ function makeWorker(role,idx){
     for(let k=0;k<3;k++){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.66,8),new THREE.MeshStandardMaterial({color:0x7a4a24})); p.rotation.z=Math.PI/2; p.position.y=k*0.2; p.castShadow=true; item.add(p); }
     item.position.set(0.25,0.85,0); item.visible=false; g.add(item);
     g.visible=false; scene.add(g);
+    g.scale.setScalar(0.95);
     const w={g,item,role,state:"seek",tree:null,timer:0,phase:idx*0.7,on:false};
     g.position.set(-22+(idx-1)*2,0,12);
     return w;
@@ -612,7 +646,7 @@ function resetWorker(w,role,i){
 }
 function ensureWorkers(){
   for(const role of ["woodcutters","carpenters","sellers","tractors"]){
-    const arr=workerNPCs[role], want=beltActive(role)?0:Math.min(WCAP[role],s[role]);  // banda = 0 humanos
+    const arr=workerNPCs[role], want=roleReplaced(role)?0:Math.min(WCAP[role],s[role]);  // máquina = 0 humanos
     while(arr.length<want) arr.push(makeWorker(role,arr.length));
     for(let i=0;i<arr.length;i++){
       const w=arr[i], shouldWork=i<want;
@@ -653,9 +687,13 @@ function updateWorkers(dt){
       if(walkNPC(w,MILLIN_POS.x,MILLIN_POS.z,3.4,dt)<2.0){ w.item.visible=false; w.tree=null; w.state="seek"; }
     }
   }
-  // TRACTORES (operadores): cosechan árboles y acarrean madera — más rápido que a pie
+  // TRACTORES / COSECHADORAS (operadores): cosechan árboles y acarrean madera
+  const harv=harvesterTier();
   for(const w of workerNPCs.tractors){
     if(!w.on)continue;
+    for(const m of w.g.userData.harv) m.visible=harv;
+    if(harv) w.g.userData.headBlade.rotation.y+=dt*12;
+    w.g.scale.setScalar(w.g.scale.x + ((harv?1.2:0.95)-w.g.scale.x)*Math.min(1,dt*6));
     if(w.state==="seek"){
       if(!w.tree || !w.tree.userData.alive) w.tree = alive.length? alive[(w.g.id+Math.floor(w.phase))%alive.length] : null;
       if(!w.tree){ continue; }
@@ -789,6 +827,13 @@ for(const n of BUYS){
 function updateBuys(dt){
   for(const n of BUYS){
     const price=n.price();
+    if(n.id==="woodcutters" && harvesterTier()){ if(!n.maxed){ n.maxed=true; n.ring.visible=false; n.model.visible=false; n.sprite.visible=false; } continue; }
+    if(n.id==="tractors"){
+      const h=harvesterTier();
+      if(n.model.userData.harv) for(const m of n.model.userData.harv) m.visible=h;
+      if(h && n.model.userData.headBlade) n.model.userData.headBlade.rotation.y+=dt*12;
+      if(h && n.label!=="🚜 Cosechadora"){ n.label="🚜 Cosechadora"; n.shown=null; }
+    }
     // llegó al máximo (p.ej. la sierra) → desaparece el spot
     if(price==null){
       if(!n.maxed){ n.maxed=true; n.ring.visible=false; n.model.visible=false; n.sprite.visible=false; burst(new THREE.Vector3(n.x,1,n.z),0xffd24a,12,3.2); }
@@ -806,7 +851,7 @@ function updateBuys(dt){
     n.model.scale.setScalar(n.model.scale.x+(target-n.model.scale.x)*Math.min(1,dt*12));
     // comprar UNA vez por entrada (sales del aro y vuelves para comprar otra)
     if(near && afford && !n.bought){
-      n.bought=true; if(spend(price)){ n.apply(); n.pop=0.5;
+      n.bought=true; if(spend(price)){ n.apply(); n.pop=0.5; sfxPop();
         burst(new THREE.Vector3(n.x,1.1,n.z),0x7CFC9C,12,3.4); popup("✓ comprado",new THREE.Vector3(n.x,2.8,n.z),"#7CFC9C");
         if(shopEl.classList.contains("open")) renderShop(); }
     }
@@ -848,6 +893,16 @@ joyEl.addEventListener("pointermove",joyMove);
 joyEl.addEventListener("pointerup",joyEnd);
 joyEl.addEventListener("pointercancel",joyEnd);
 
+// --- audio (sintetizado, sin archivos) ---
+let actx=null, soundOn=true, lastReg=0;
+function initAudio(){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(e){} }
+function tone(freq,dur,type,vol,when){ if(!actx||!soundOn)return; const t=when||actx.currentTime; const o=actx.createOscillator(),g=actx.createGain(); o.type=type||"square"; o.frequency.value=freq; o.connect(g); g.connect(actx.destination); g.gain.setValueAtTime(vol||0.06,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur); }
+function sfxSaw(){ tone(150,0.13,"sawtooth",0.05); }
+function sfxChop(){ tone(95,0.1,"triangle",0.09); }
+function sfxPop(){ if(!actx)return; const t=actx.currentTime; tone(660,0.06,"square",0.06,t); tone(990,0.09,"square",0.06,t+0.05); }
+function sfxRegister(){ if(!actx||!soundOn)return; const t=actx.currentTime; tone(900,0.07,"square",0.05,t); tone(1350,0.12,"square",0.05,t+0.07); }
+canvas.addEventListener("pointerdown",initAudio,{once:true});
+
 function popup(text,worldPos,color){
   const v=worldPos.clone().project(camera);
   const el=document.createElement("div"); el.className="popup"; el.textContent=text;
@@ -869,7 +924,7 @@ function doAction(n){
     s.wood+=amt;
     t.userData.alive=false; t.userData.regrowAt=tAccum+12;
     popup("+"+amt+" 🌲",t.position.clone().add(new THREE.Vector3(0,4,0)),"#a8e6a8");
-    burst(t.position.clone().add(new THREE.Vector3(0,1.6,0)),0x9c6b3f,9,4.2);
+    burst(t.position.clone().add(new THREE.Vector3(0,1.6,0)),0x9c6b3f,9,4.2); sfxChop();
   }
 }
 const interact=()=>doAction(nearest);
@@ -984,16 +1039,17 @@ function loop(){
 
   // --- sierra del aserradero ---
   const milling = s.millIn>0.05;
-  sawSpin += (milling?34:3)*dt; sawPivot.rotation.z=sawSpin;
-  if(milling) cutT += dt*1.3;
-  if(cutT>=2) cutT-=2;
+  sawSpin += (milling?34:3)*dt; sawPivot.rotation.z=sawSpin; if(sawBlade2) sawBlade2.parent.rotation.z=-sawSpin;
+  if(milling) cutT += dt*(0.7+millProcRate()*0.12);   // más carpinteros = corta más rápido
+  if(cutT>=2){ cutT-=2; }
+  if(milling){ if(cutT>=1 && !sawCutFlag){ sawCutFlag=true; sfxSaw(); } if(cutT<1) sawCutFlag=false; }
   if(cutT<1){                                  // el tronco avanza hacia el disco
     sawLog.visible=true; sawLog.position.x=(SAW_X-1.6)+cutT*1.6;
     for(const p of outPlanks) p.visible=false;
   } else {                                     // salen las tablas por el otro lado
     sawLog.visible=false;
-    const k=cutT-1;
-    for(let i=0;i<outPlanks.length;i++){ outPlanks[i].visible=true; outPlanks[i].position.x=SAW_X+k*2.2; }
+    const k=cutT-1, np=Math.min(outPlanks.length,2+Math.ceil(s.carpenters*0.7));   // más carpinteros = más tablas por corte
+    for(let i=0;i<outPlanks.length;i++){ const on=i<np; outPlanks[i].visible=on; if(on) outPlanks[i].position.x=SAW_X+k*2.2; }
   }
   for(const ch of chips){
     if(ch.life>0){ ch.life-=dt; ch.m.position.addScaledVector(ch.vel,dt); ch.vel.y-=10*dt; if(ch.life<=0) ch.m.visible=false; }
@@ -1020,6 +1076,7 @@ function loop(){
       if(c.wait<=0){
         if(s.shelf>=1){ s.shelf-=1; s.cash+=s.price; s.sold++; salesCount++;   // el dinero se queda en la CAJA
           burst(new THREE.Vector3(12,1.7,17.4),0xffd24a,5,2.4);
+          if(tAccum-lastReg>0.12){ lastReg=tAccum; sfxRegister(); }
           if(Math.random()<0.4) popup("+$"+s.price,new THREE.Vector3(12,2.7,17.6),"#7CFC9C"); }
         else lostSales+=1;
         c.phase="out";
@@ -1040,7 +1097,7 @@ function loop(){
   lostSales*=Math.max(0,1-dt*0.4);
 
   // --- lo comprado, visible ---
-  ensureWorkers(); updateWorkers(dt); updateBuys(dt);
+  ensureWorkers(); updateWorkers(dt); updateBuys(dt); updateEvolutions();
   for(let i=0;i<billboards.length;i++) billboards[i].visible=!!s.mkt[MKT[i].id];
   // bandas transportadoras animadas
   animBelt(plankBelt, s.belt, dt);
@@ -1173,7 +1230,8 @@ function renderLesson(){
 function resize(){ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); }
 addEventListener("resize",resize); resize();
 
-$("startBtn").onclick=()=>{ $("help").style.display="none"; helpOpen=false; };
+$("startBtn").onclick=()=>{ $("help").style.display="none"; helpOpen=false; initAudio(); };
+$("muteBtn").onclick=()=>{ soundOn=!soundOn; if(soundOn)initAudio(); $("muteBtn").textContent=soundOn?"🔊 Sonido":"🔇 Silencio"; };
 $("helpBtn").onclick=()=>{ $("help").style.display="flex"; helpOpen=true; };
 setInterval(save,3000); addEventListener("beforeunload",save);
 renderShop();
