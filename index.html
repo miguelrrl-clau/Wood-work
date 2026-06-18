@@ -1009,7 +1009,7 @@ function loop(){
     if(inZone.type==="millIn"){ const m=Math.min(s.wood,rate,millInCap()-s.millIn); if(m>0){s.wood-=m; s.millIn+=m;} }
     else if(inZone.type==="millOut"){ const m=Math.min(s.millOut,rate,carryCap()-s.planks); if(m>0){s.millOut-=m; s.planks+=m;} }
     else if(inZone.type==="storeIn"){ const m=Math.min(s.planks,rate,shelfCap()-s.shelf); if(m>0){s.planks-=m; s.shelf+=m;} }
-    else if(inZone.type==="cash"){ const m=Math.min(s.cash, Math.max(800,s.cash*4)*dt); if(m>0){ s.cash-=m; s.money+=m; if(Math.random()<0.3) burst(new THREE.Vector3(15.6,1,18.8),0xffd24a,3,2); } }
+    else if(inZone.type==="cash"){ if(s.cash>=1){ const amt=s.cash; s.money+=amt; s.cash=0; burst(new THREE.Vector3(15.6,1.2,18.8),0xffd24a,16,3.5); sfxRegister(); popup("+$"+fmt(amt),new THREE.Vector3(15.6,2.6,18.8),"#7CFC9C"); } }
   }
 
   // --- prompt ---
