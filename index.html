@@ -297,7 +297,18 @@ function makeBuilding(x,z,color,roofColor,label){
   g.position.set(x,0,z); scene.add(g);
   return g;
 }
-const mill=makeBuilding(-12,12,0x9c6b3f,0x7a3b2a,"Aserradero");
+// ---- edificios por TIER (cambian forma y color al subir de nivel) ----
+function bbox(w,h,d,c,y){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:c})); m.position.y=y; m.castShadow=true; m.receiveShadow=true; return m; }
+function bcone(r,h,c,y){ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,4),new THREE.MeshStandardMaterial({color:c})); m.position.y=y; m.rotation.y=Math.PI/4; m.castShadow=true; return m; }
+function bchimney(x,y,z,c){ const m=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,1.8,10),new THREE.MeshStandardMaterial({color:c})); m.position.set(x,y,z); m.castShadow=true; return m; }
+function bdoor(z){ const m=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.2,0.2),new THREE.MeshStandardMaterial({color:0x2a1d10})); m.position.set(0,1.1,z); return m; }
+function variant(x,z,parts){ const g=new THREE.Group(); for(const p of parts) g.add(p); g.position.set(x,0,z); g.visible=false; scene.add(g); return g; }
+const millTiers=[
+  variant(-12,12,[ bbox(5,3.4,4.6,0x9c6b3f,1.7), bcone(4,2.2,0x7a3b2a,4.4), bdoor(2.4) ]),                                                                   // T0 cabaña de madera
+  variant(-12,12,[ bbox(7,4.4,6,0xb5552e,2.2), bcone(5.6,2.8,0x6e2a1c,5.7), bchimney(2.4,5.2,-1.6,0x4a3326), bdoor(3.05) ]),                                  // T1 molino rojo
+  variant(-12,12,[ bbox(8,5.6,6.6,0x6f7d86,2.8), bbox(8.4,0.6,7,0x44525a,5.8), bchimney(-2.6,6.4,-1.8,0x556069), bchimney(2.6,6.4,-1.8,0x556069), bdoor(3.35) ]), // T2 industrial gris
+  variant(-12,12,[ bbox(9,7,7.2,0x35506b,3.5), bbox(9.5,0.7,7.7,0x24384d,7.1), bchimney(-3,7.8,-2,0x2b3e52), bchimney(0,8.2,-2,0x2b3e52), bchimney(3,7.8,-2,0x2b3e52), bbox(2.4,1.0,0.3,0x66e0ff,5.4), bdoor(3.65) ]), // T3 fábrica acero
+];
 dirtPatch(-12,12,7);
 // === sierra del aserradero (proceso de corte visible) ===
 const SAW_X=-12, SAW_Z=15.7;
@@ -342,31 +353,21 @@ function burst(pos,color,n,power){
     if(++c>=n)break;
   }
 }
-const market=makeBuilding(12,12,0xc99a3f,0x2a5a7a,"Mercado");
 dirtPatch(12,12,7);
-// toldo de mercado
-const awning=new THREE.Mesh(new THREE.BoxGeometry(8,0.4,3),new THREE.MeshStandardMaterial({color:0xd64545}));
-awning.position.set(12,4.2,15.5); awning.castShadow=true; scene.add(awning);
-
-// ===== EVOLUCIÓN VISUAL: mejoras que aparecen al subir de nivel =====
-const evolveParts=[];   // {mesh, on:()=>bool}
-const addEvolve=(mesh,onFn)=>{ mesh.visible=false; evolveParts.push({mesh,on:onFn}); };
-const Em=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c},o||{}));
-// --- ASERRADERO (carpinteros): chimenea, ático, segundo disco, antena ---
-const millChimney=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.35,1.6,10),Em(0x6b4a2a)); millChimney.position.set(-10.2,5.4,10.5); millChimney.castShadow=true; scene.add(millChimney); addEvolve(millChimney,()=>s.carpenters>=1);
-const millAttic=new THREE.Group();
-const atticBox=new THREE.Mesh(new THREE.BoxGeometry(4.4,1.6,3.6),Em(0xb07c4a)); atticBox.position.y=6.0; millAttic.add(atticBox);
-const atticRoof=new THREE.Mesh(new THREE.ConeGeometry(3.6,1.7,4),Em(0x7a3b2a)); atticRoof.position.y=7.6; atticRoof.rotation.y=Math.PI/4; millAttic.add(atticRoof);
-millAttic.position.set(-12,0,12); millAttic.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(millAttic); addEvolve(millAttic,()=>s.carpenters>=3);
-addEvolve(sawPivot2,()=>s.carpenters>=2);
-// --- TIENDA (vendedores): letrero, segundo toldo, banderines, segundo piso ---
-const shopSign=textSprite("🏪 TIENDA","#fff3c4"); shopSign.scale.set(4.2,1.05,1); shopSign.position.set(12,5.6,15.4); scene.add(shopSign); addEvolve(shopSign,()=>s.sellers>=1);
-const awning2=new THREE.Mesh(new THREE.BoxGeometry(8,0.35,1.4),Em(0xffffff)); awning2.position.set(12,3.6,16.6); awning2.castShadow=true; scene.add(awning2); addEvolve(awning2,()=>s.sellers>=2);
-const shopFloor2=new THREE.Group();
-const f2=new THREE.Mesh(new THREE.BoxGeometry(6.6,2.2,5.6),Em(0xe0b85a)); f2.position.y=5.1; shopFloor2.add(f2);
-const f2roof=new THREE.Mesh(new THREE.ConeGeometry(5.2,2.0,4),Em(0x2a5a7a)); f2roof.position.y=7.1; f2roof.rotation.y=Math.PI/4; shopFloor2.add(f2roof);
-shopFloor2.position.set(12,0,12); shopFloor2.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(shopFloor2); addEvolve(shopFloor2,()=>s.sellers>=3);
-function updateEvolutions(){ for(const e of evolveParts) e.mesh.visible=e.on(); }
+const storeTiers=[
+  variant(12,12,[ bbox(5,3,4.6,0xc99a3f,1.5), bcone(4,1.8,0x2a5a7a,3.7), bbox(5.4,0.3,1.6,0xd64545,3.0), bdoor(2.4) ]),                                       // T0 puesto
+  variant(12,12,[ bbox(7,4.2,6,0x2a8c7a,2.1), bcone(5.6,2.4,0x18564a,5.5), bbox(7.2,0.32,1.5,0xffffff,3.5), bdoor(3.05) ]),                                   // T1 tienda
+  variant(12,12,[ bbox(8,5.2,6.6,0xe6edf0,2.6), bbox(8.4,0.5,7,0x9fb0bb,5.4), (()=>{const m=bbox(7.4,2.6,0.2,0x7fc7ff,1.8); m.position.z=3.05; m.material.transparent=true; m.material.opacity=0.55; return m;})(), bdoor(3.35) ]), // T2 super con vidrio
+  variant(12,12,[ bbox(9,6.6,7.2,0x6a3d9a,3.3), bbox(9.5,0.6,7.7,0x4a2a72,6.7), bbox(3.0,1.0,0.3,0xffd24a,5.4), bdoor(3.65) ]),                               // T3 plaza
+];
+function updateEvolutions(){
+  const mt = s.carpenters<2?0:s.carpenters<4?1:s.carpenters<6?2:3;
+  const st = s.sellers<1?0:s.sellers<3?1:s.sellers<5?2:3;
+  for(let i=0;i<millTiers.length;i++) millTiers[i].visible=(i===mt);
+  for(let i=0;i<storeTiers.length;i++) storeTiers[i].visible=(i===st);
+  sawPivot2.visible = s.carpenters>=2;
+  sawPivot.scale.setScalar(1+mt*0.18);                 // la sierra crece con el tier
+}
 
 // letreros flotantes (sprites de texto)
 function textSprite(text,color="#ffffff"){
@@ -646,7 +647,8 @@ function resetWorker(w,role,i){
 }
 function ensureWorkers(){
   for(const role of ["woodcutters","carpenters","sellers","tractors"]){
-    const arr=workerNPCs[role], want=roleReplaced(role)?0:Math.min(WCAP[role],s[role]);  // máquina = 0 humanos
+    const arr=workerNPCs[role], want = role==="tractors" ? (s.tractors<3?Math.min(2,s.tractors):1)   // se consolidan en 1 cosechadora
+              : roleReplaced(role)?0:Math.min(WCAP[role],s[role]);                                     // máquina/banda = 0 humanos
     while(arr.length<want) arr.push(makeWorker(role,arr.length));
     for(let i=0;i<arr.length;i++){
       const w=arr[i], shouldWork=i<want;
@@ -687,13 +689,15 @@ function updateWorkers(dt){
       if(walkNPC(w,MILLIN_POS.x,MILLIN_POS.z,3.4,dt)<2.0){ w.item.visible=false; w.tree=null; w.state="seek"; }
     }
   }
-  // TRACTORES / COSECHADORAS (operadores): cosechan árboles y acarrean madera
+  // TRACTORES / COSECHADORAS: al subir, pocas máquinas pero MÁS GRANDES
   const harv=harvesterTier();
+  const tscale = s.tractors<3?0.95 : s.tractors<6?1.4 : 1.9;
   for(const w of workerNPCs.tractors){
     if(!w.on)continue;
+    if(w.leaving){ if(walkNPC(w,LEAVE.x,LEAVE.z,4.6,dt)<2){ w.on=false; w.leaving=false; w.g.visible=false; } continue; }  // reemplazada por la grande → se va
     for(const m of w.g.userData.harv) m.visible=harv;
     if(harv) w.g.userData.headBlade.rotation.y+=dt*12;
-    w.g.scale.setScalar(w.g.scale.x + ((harv?1.2:0.95)-w.g.scale.x)*Math.min(1,dt*6));
+    w.g.scale.setScalar(w.g.scale.x + (tscale-w.g.scale.x)*Math.min(1,dt*5));
     if(w.state==="seek"){
       if(!w.tree || !w.tree.userData.alive) w.tree = alive.length? alive[(w.g.id+Math.floor(w.phase))%alive.length] : null;
       if(!w.tree){ continue; }
