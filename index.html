@@ -556,7 +556,7 @@ for(let i=0;i<10;i++){
   body.position.y=0.8; body.castShadow=true; g.add(body);
   const hd=new THREE.Mesh(new THREE.SphereGeometry(0.3,12,12),new THREE.MeshStandardMaterial({color:0xf1c27d})); hd.position.y=1.55; hd.castShadow=true; g.add(hd);
   g.visible=false; scene.add(g);
-  customers.push({g,body,active:false,phase:null});
+  customers.push({g,body,active:false,phase:null, ox:((i%5)-2)*0.72, oz:-Math.floor(i/5)*0.85});  // su propio carril frente al mostrador
 }
 const COUNTER_FRONT=new THREE.Vector3(12,0,18.2), CUST_EXIT=new THREE.Vector3(24,0,24);
 function spawnCustomer(){
@@ -574,20 +574,23 @@ const MILLIN_POS=new THREE.Vector3(-15.5,0,16.8), MILLOUT_POS=new THREE.Vector3(
 const workerNPCs={woodcutters:[],carpenters:[],sellers:[],tractors:[]};
 function makeTractor(){
   const g=new THREE.Group(); const mat=c=>new THREE.MeshStandardMaterial({color:c});
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,0.7),mat(0x2e7d32)); body.position.y=0.55; g.add(body);
-  const cab=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.45,0.62),mat(0x214d22)); cab.position.set(-0.18,0.97,0); g.add(cab);
-  const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.4,8),mat(0x333333)); pipe.position.set(0.42,1.0,0.22); g.add(pipe);
-  for(const zz of [-0.4,0.4]){
-    const wb=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.18,14),mat(0x1a1a1a)); wb.rotation.x=Math.PI/2; wb.position.set(0.34,0.33,zz); g.add(wb);
-    const wf=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.16,14),mat(0x1a1a1a)); wf.rotation.x=Math.PI/2; wf.position.set(-0.42,0.24,zz); g.add(wf);
+  // FRENTE = +z (igual que los demás NPCs) → se mueve hacia donde mira
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,1.0),mat(0x2e7d32)); body.position.y=0.55; g.add(body);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.45,0.5),mat(0x214d22)); cab.position.set(0,0.97,-0.18); g.add(cab);
+  const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.4,8),mat(0x333333)); pipe.position.set(0.22,1.0,0.42); g.add(pipe);
+  const wheels=[];
+  for(const xx of [-0.4,0.4]) for(const [zz,r,h] of [[-0.34,0.33,0.2],[0.42,0.23,0.17]]){
+    const wg=new THREE.Group(); wg.position.set(xx,r,zz);
+    const wm=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,14),mat(0x1a1a1a)); wm.rotation.z=Math.PI/2; wg.add(wm);
+    g.add(wg); wheels.push(wg);
   }
-  // partes de COSECHADORA (brazo + cabezal cortador), ocultas hasta que evoluciona
+  // partes de COSECHADORA (brazo + cabezal al frente), ocultas hasta que evoluciona
   const harv=[];
-  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.14,0.14),mat(0xf1c40f)); arm.position.set(0.7,1.0,0); arm.rotation.z=-0.35; g.add(arm); harv.push(arm);
-  const housing=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.42,0.52),mat(0xd35400)); housing.position.set(1.18,0.78,0); g.add(housing); harv.push(housing);
-  const headBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.05,16),mat(0xcfd8dc)); headBlade.rotation.x=Math.PI/2; headBlade.position.set(1.18,0.5,0); g.add(headBlade); harv.push(headBlade);
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.9),mat(0xf1c40f)); arm.position.set(0,1.0,0.7); arm.rotation.x=0.35; g.add(arm); harv.push(arm);
+  const housing=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.42,0.32),mat(0xd35400)); housing.position.set(0,0.78,1.18); g.add(housing); harv.push(housing);
+  const headBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.05,16),mat(0xcfd8dc)); headBlade.rotation.x=Math.PI/2; headBlade.position.set(0,0.5,1.18); g.add(headBlade); harv.push(headBlade);
   for(const m of harv) m.visible=false;
-  g.userData.harv=harv; g.userData.headBlade=headBlade;
+  g.userData.harv=harv; g.userData.headBlade=headBlade; g.userData.wheels=wheels;
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   return g;
 }
@@ -596,7 +599,7 @@ function makeWorker(role,idx){
     const g=makeTractor();
     const item=new THREE.Group();
     for(let k=0;k<3;k++){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.66,8),new THREE.MeshStandardMaterial({color:0x7a4a24})); p.rotation.z=Math.PI/2; p.position.y=k*0.2; p.castShadow=true; item.add(p); }
-    item.position.set(0.25,0.85,0); item.visible=false; g.add(item);
+    item.position.set(0,0.95,-0.15); item.visible=false; g.add(item);
     g.visible=false; scene.add(g);
     g.scale.setScalar(0.95);
     const w={g,item,role,state:"seek",tree:null,timer:0,phase:idx*0.7,on:false};
@@ -658,12 +661,14 @@ function ensureWorkers(){
   }
 }
 // caminar hacia (tx,tz): mueve, orienta y anima piernas; devuelve distancia restante
+function lerpAngle(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
 function walkNPC(w,tx,tz,speed,dt){
   const dx=tx-w.g.position.x, dz=tz-w.g.position.z, d=Math.hypot(dx,dz);
   if(d>0.12){
-    w.g.position.x+=dx/d*speed*dt; w.g.position.z+=dz/d*speed*dt; w.g.rotation.y=Math.atan2(dx,dz);
+    w.g.position.x+=dx/d*speed*dt; w.g.position.z+=dz/d*speed*dt;
+    w.g.rotation.y=lerpAngle(w.g.rotation.y, Math.atan2(dx,dz), Math.min(1,dt*7));  // gira suave hacia el frente
     if(w.ll){ w.phase+=dt*9; const sw=Math.sin(w.phase)*0.5; w.ll.rotation.x=sw; w.rl.rotation.x=-sw; w.la.rotation.x=-sw*0.7; w.ra.rotation.x=sw*0.7; }
-    else w.phase+=dt*3;   // vehículo (tractor): sin piernas
+    else { w.phase+=dt*3; const wh=w.g.userData.wheels; if(wh) for(const g of wh) g.rotation.x -= speed*dt*2.2; }  // vehículo: ruedan las llantas
   } else if(w.ll){ w.ll.rotation.x*=0.8; w.rl.rotation.x*=0.8; w.la.rotation.x*=0.8; w.ra.rotation.x*=0.8; }
   return d;
 }
@@ -696,7 +701,7 @@ function updateWorkers(dt){
     if(!w.on)continue;
     if(w.leaving){ if(walkNPC(w,LEAVE.x,LEAVE.z,4.6,dt)<2){ w.on=false; w.leaving=false; w.g.visible=false; } continue; }  // reemplazada por la grande → se va
     for(const m of w.g.userData.harv) m.visible=harv;
-    if(harv) w.g.userData.headBlade.rotation.y+=dt*12;
+    if(harv) w.g.userData.headBlade.rotation.z+=dt*12;
     w.g.scale.setScalar(w.g.scale.x + (tscale-w.g.scale.x)*Math.min(1,dt*5));
     if(w.state==="seek"){
       if(!w.tree || !w.tree.userData.alive) w.tree = alive.length? alive[(w.g.id+Math.floor(w.phase))%alive.length] : null;
@@ -843,7 +848,7 @@ function updateBuys(dt){
     if(n.id==="tractors"){
       const h=harvesterTier();
       if(n.model.userData.harv) for(const m of n.model.userData.harv) m.visible=h;
-      if(h && n.model.userData.headBlade) n.model.userData.headBlade.rotation.y+=dt*12;
+      if(h && n.model.userData.headBlade) n.model.userData.headBlade.rotation.z+=dt*12;
       if(h && n.label!=="🚜 Cosechadora"){ n.label="🚜 Cosechadora"; n.shown=null; }
     }
     // llegó al máximo (p.ej. la sierra) → desaparece para siempre
@@ -1097,11 +1102,11 @@ function loop(){
       }
       continue;
     }
-    const target=c.phase==="in"?COUNTER_FRONT:CUST_EXIT;
-    const dx=target.x-c.g.position.x, dz=target.z-c.g.position.z, dist=Math.hypot(dx,dz);
-    if(dist>0.05){ c.g.position.x+=dx/dist*2.8*dt; c.g.position.z+=dz/dist*2.8*dt; c.g.rotation.y=Math.atan2(dx,dz); }
+    const tx=c.phase==="in"?COUNTER_FRONT.x+c.ox:CUST_EXIT.x, tz=c.phase==="in"?COUNTER_FRONT.z+c.oz:CUST_EXIT.z;
+    const dx=tx-c.g.position.x, dz=tz-c.g.position.z, dist=Math.hypot(dx,dz);
+    if(dist>0.05){ c.g.position.x+=dx/dist*2.8*dt; c.g.position.z+=dz/dist*2.8*dt; c.g.rotation.y=lerpAngle(c.g.rotation.y,Math.atan2(dx,dz),Math.min(1,dt*7)); }
     c.body.position.y=0.8+Math.abs(Math.sin(tAccum*7+c.g.id))*0.05;
-    if(c.phase==="in" && dist<0.9){ c.phase="wait"; c.wait=0.6; }
+    if(c.phase==="in" && dist<0.8){ c.phase="wait"; c.wait=0.6; }
     else if(c.phase==="out" && dist<1.5){ c.active=false; c.g.visible=false; }
   }
   const cost=upkeep()*dt;
