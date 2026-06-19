@@ -673,6 +673,19 @@ function avoidDir(selfG,ndx,ndz){
   for(const c of customers){ if(c.active && c.g!==selfG) push(c.g.position.x,c.g.position.z,0.6); }
   const m=Math.hypot(ax,az)||1; return [ax/m, az/m];
 }
+// colisión dura: saca al objeto de los obstáculos estáticos
+function clampOut(g,rad){ for(const o of staticObs){ const dx=g.position.x-o.x, dz=g.position.z-o.z, d=Math.hypot(dx,dz), min=o.r+rad; if(d<min && d>0.0001){ const k=min/d; g.position.x=o.x+dx*k; g.position.z=o.z+dz*k; } } }
+// nadie atraviesa a nadie: separa pares que se solapan
+function resolveCollisions(){
+  const list=[{g:player,r:0.55}];
+  for(const role of ["woodcutters","sellers","tractors"]) for(const w of workerNPCs[role]) if(w.on) list.push({g:w.g, r: role==="tractors"?0.75*w.g.scale.x:0.5});
+  for(const c of customers) if(c.active) list.push({g:c.g, r:0.45});
+  for(const e of list) clampOut(e.g,e.r);
+  for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
+    const a=list[i], b=list[j], dx=b.g.position.x-a.g.position.x, dz=b.g.position.z-a.g.position.z; let d=Math.hypot(dx,dz); const min=a.r+b.r;
+    if(d<min){ if(d<0.0001)d=0.01; const p=(min-d)/2, ux=dx/d, uz=dz/d; a.g.position.x-=ux*p; a.g.position.z-=uz*p; b.g.position.x+=ux*p; b.g.position.z+=uz*p; }
+  }
+}
 function walkNPC(w,tx,tz,speed,dt){
   const dx=tx-w.g.position.x, dz=tz-w.g.position.z, d=Math.hypot(dx,dz);
   if(d>0.12){
@@ -1027,7 +1040,7 @@ function loop(){
   let inZone=null;
   if(!helpOpen) for(const z of zones){ if(player.position.distanceTo(z.pos)<z.r){ inZone=z; break; } }
   if(inZone){
-    const rate=16*dt;
+    const rate=300*dt;   // cargar/descargar mucho más rápido
     if(inZone.type==="millIn"){ const m=Math.min(s.wood,rate,millInCap()-s.millIn); if(m>0){s.wood-=m; s.millIn+=m;} }
     else if(inZone.type==="millOut"){ const m=Math.min(s.millOut,rate,carryCap()-s.planks); if(m>0){s.millOut-=m; s.planks+=m;} }
     else if(inZone.type==="storeIn"){ const m=Math.min(s.planks,rate,shelfCap()-s.shelf); if(m>0){s.planks-=m; s.shelf+=m;} }
@@ -1129,7 +1142,7 @@ function loop(){
   lostSales*=Math.max(0,1-dt*0.4);
 
   // --- lo comprado, visible ---
-  ensureWorkers(); updateWorkers(dt); updateBuys(dt); updateEvolutions();
+  ensureWorkers(); updateWorkers(dt); updateBuys(dt); updateEvolutions(); resolveCollisions();
   for(let i=0;i<billboards.length;i++) billboards[i].visible=!!s.mkt[MKT[i].id];
   // bandas transportadoras animadas
   animBelt(plankBelt, s.belt, dt);
