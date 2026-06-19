@@ -662,11 +662,24 @@ function ensureWorkers(){
 }
 // caminar hacia (tx,tz): mueve, orienta y anima piernas; devuelve distancia restante
 function lerpAngle(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
+// obstáculos a rodear (NO los árboles: esos se talan)
+const staticObs=[ {x:-12,z:12,r:4.2}, {x:12,z:12,r:4.2}, {x:-12,z:15.7,r:1.7}, {x:12,z:16.6,r:1.6} ];
+function avoidDir(selfG,ndx,ndz){
+  let ax=ndx, az=ndz; const px=selfG.position.x, pz=selfG.position.z;
+  const push=(ox,oz,r)=>{ const dx=px-ox, dz=pz-oz, d=Math.hypot(dx,dz), range=r+0.9; if(d<range && d>0.001){ const s=(range-d)/range; ax+=dx/d*s*1.4; az+=dz/d*s*1.4; } };
+  for(const o of staticObs) push(o.x,o.z,o.r);
+  if(selfG!==player) push(player.position.x,player.position.z,0.7);
+  for(const role in workerNPCs) for(const w of workerNPCs[role]){ if(w.on && w.g!==selfG) push(w.g.position.x,w.g.position.z,0.6); }
+  for(const c of customers){ if(c.active && c.g!==selfG) push(c.g.position.x,c.g.position.z,0.6); }
+  const m=Math.hypot(ax,az)||1; return [ax/m, az/m];
+}
 function walkNPC(w,tx,tz,speed,dt){
   const dx=tx-w.g.position.x, dz=tz-w.g.position.z, d=Math.hypot(dx,dz);
   if(d>0.12){
-    w.g.position.x+=dx/d*speed*dt; w.g.position.z+=dz/d*speed*dt;
-    w.g.rotation.y=lerpAngle(w.g.rotation.y, Math.atan2(dx,dz), Math.min(1,dt*7));  // gira suave hacia el frente
+    let ndx=dx/d, ndz=dz/d;
+    const a=avoidDir(w.g,ndx,ndz); ndx=a[0]; ndz=a[1];      // rodea obstáculos
+    w.g.position.x+=ndx*speed*dt; w.g.position.z+=ndz*speed*dt;
+    w.g.rotation.y=lerpAngle(w.g.rotation.y, Math.atan2(ndx,ndz), Math.min(1,dt*7));  // gira suave hacia el frente
     if(w.ll){ w.phase+=dt*9; const sw=Math.sin(w.phase)*0.5; w.ll.rotation.x=sw; w.rl.rotation.x=-sw; w.la.rotation.x=-sw*0.7; w.ra.rotation.x=sw*0.7; }
     else { w.phase+=dt*3; const wh=w.g.userData.wheels; if(wh) for(const g of wh) g.rotation.x -= speed*dt*2.2; }  // vehículo: ruedan las llantas
   } else if(w.ll){ w.ll.rotation.x*=0.8; w.rl.rotation.x*=0.8; w.la.rotation.x*=0.8; w.ra.rotation.x*=0.8; }
