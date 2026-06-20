@@ -164,8 +164,11 @@ conviene invertir en el `engine` data-driven antes de hacer un segundo mundo.
 
 ## 6. Roadmap de refactor (incremental, sin romper lo que funciona)
 
-1. **Extraer `CONFIG`** (1 bloque arriba): tasas, costos, caps, thresholds, colores. Referenciar
-   desde los helpers. *(bajo riesgo, alto valor — recomendado primero)*
+1. ✅ **HECHO — Extraer `CFG`** (1 bloque arriba en `index.html`): tema (cielo/suelo/niebla),
+   economía (tasas, caps, demanda, precio/elasticidad) y umbrales de tier/consolidación. Los
+   helpers (`woodDeliver`, `millProcRate`, `vendorRate`, `*Cap`, `tierOf`, `harvesterTier`, etc.)
+   ya leen de `CFG`. Comportamiento idéntico; ahora se tunea/replica desde un solo objeto.
+   *(Se llama `CFG` y no `WORLD` porque `WORLD` ya era el radio del mapa.)*
 2. **Registro de modelos** `MODELS = { log, plank, tractor, harvester, lumberjack, belt, millT0.. }`
    y que `makeBuyModel`/NPCs/tiers lean de ahí.
 3. **Estaciones como objetos**: derivar `SAW_X`, zonas y spots de `station.pos`.

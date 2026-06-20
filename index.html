@@ -159,6 +159,20 @@ try {
   throw e;
 }
 
+// ============ CONFIG DEL MUNDO (un solo lugar para tunear / replicar) ============
+// Para hacer otro mundo (hotel, restaurante, huerto) se clona este bloque y los modelos.
+const CFG = {
+  theme: { sky:0x8fc4e8, ground:0x4f9a4f, fogNear:40, fogFar:110 },
+  econ: {
+    chopMult:5, woodcutterRate:0.8, tractorRate:6,
+    millBase:2.5, millPerCarpenter:2.5, vendorRate:3, beltRate:9,
+    carry:[12,20,32,60], millInCap:999, millOutBase:20, millOutPerCarpenter:8,
+    shelfBase:20, shelfPerSeller:10,
+    demandBase:1.2, refPrice:10, elasticity:1.25,
+  },
+  tiers: { buildingAt:[1,3,6], harvesterAt:3, tractorConsolidate:[3,6], tractorScale:[0.95,1.4,1.9] },
+};
+
 // ===================== ECONOMÍA =====================
 const SAVE_KEY = "aserradero-3d-v1";
 const def = () => ({
@@ -171,7 +185,7 @@ let s = (()=>{ try{const r=JSON.parse(localStorage.getItem(SAVE_KEY));if(r)retur
 let noSave=false;
 const save=()=>{ if(noSave)return; localStorage.setItem(SAVE_KEY,JSON.stringify(s)); };
 
-const REF_PRICE=10, ELASTICITY=1.25;
+const REF_PRICE=CFG.econ.refPrice, ELASTICITY=CFG.econ.elasticity;
 const TOOLS=[
   {name:"Hacha",ic:"🪓",mult:1,cost:0},
   {name:"Sierra manual",ic:"🪚",mult:3,cost:40},
@@ -191,27 +205,27 @@ const MKT=[
   {id:"influencer",name:"Influencer",ic:"⭐",desc:"+80 demanda · $18/s",cost:4000,demand:80,upkeep:18},
 ];
 const toolMult=()=>TOOLS[s.toolLevel].mult;
-const chopAmount=()=>toolMult()*5;
-const woodDeliver=()=> (harvesterTier()?0:s.woodcutters*0.8*toolMult()) + s.tractors*6;  // leñadores (hasta la cosechadora) + tractores
-const millProcRate=()=>2.5 + s.carpenters*2.5;        // tablas/s que corta la sierra (input→output)
-const vendorRate=()=>s.sellers*3;                     // tablas/s que los vendedores llevan a la repisa
+const chopAmount=()=>toolMult()*CFG.econ.chopMult;
+const woodDeliver=()=> (harvesterTier()?0:s.woodcutters*CFG.econ.woodcutterRate*toolMult()) + s.tractors*CFG.econ.tractorRate;  // leñadores (hasta la cosechadora) + tractores
+const millProcRate=()=>CFG.econ.millBase + s.carpenters*CFG.econ.millPerCarpenter;     // tablas/s que corta la sierra
+const vendorRate=()=>s.sellers*CFG.econ.vendorRate;   // tablas/s que los vendedores llevan a la repisa
 // ---- LÍMITES (todo tiene tope; las mejoras los amplían) ----
-const CARRY=[12,20,32,60];                            // mochila según herramienta
+const CARRY=CFG.econ.carry;                            // mochila según herramienta
 const carryCap=()=>CARRY[s.toolLevel];                // cuánta madera/tablas cargas a la vez
-const millInCap=()=>999;                              // patio de entrada: casi sin tope (se acumula la materia prima)
-const millOutCap=()=>20+s.carpenters*8;               // SALIDA: aquí está el cuello de botella real
-const shelfCap=()=>20+s.sellers*10;                   // tope de la repisa de la tienda
-const beltRate=()=>s.belt*9;                          // tablas/s: banda aserradero → tienda (solo transporte)
+const millInCap=()=>CFG.econ.millInCap;               // patio de entrada: casi sin tope
+const millOutCap=()=>CFG.econ.millOutBase+s.carpenters*CFG.econ.millOutPerCarpenter;   // SALIDA: cuello de botella real
+const shelfCap=()=>CFG.econ.shelfBase+s.sellers*CFG.econ.shelfPerSeller;               // tope de la repisa de la tienda
+const beltRate=()=>s.belt*CFG.econ.beltRate;          // tablas/s: banda aserradero → tienda (solo transporte)
 const MACHINES=[
   {key:"belt", name:"Banda de tablas",ic:"📦",desc:"Aserradero → tienda · reemplaza a los vendedores",base:400},
 ];
 const machineCost=m=>Math.floor(m.base*Math.pow(2.2,s[m.key]));
-const harvesterTier=()=>s.tractors>=3;                  // con ≥3 tractores ya es cosechadora (quita leñadores)
+const harvesterTier=()=>s.tractors>=CFG.tiers.harvesterAt;   // con ≥N tractores ya es cosechadora (quita leñadores)
 const roleReplaced=role=> (role==="sellers"&&s.belt>0) || (role==="woodcutters"&&harvesterTier());
 const upkeep=()=>MKT.reduce((a,m)=>a+(s.mkt[m.id]?m.upkeep:0),0);
 const demandPerSec=()=>Math.max(0,s.demandLevel*Math.pow(REF_PRICE/s.price,ELASTICITY)); // clientes/s
 const workerCost=k=>Math.floor(WORKERS[k].base*Math.pow(WORKERS[k].scale,s[k]));
-const recomputeDemand=()=>{s.demandLevel=1.2+MKT.reduce((a,m)=>a+(s.mkt[m.id]?m.demand:0),0);};
+const recomputeDemand=()=>{s.demandLevel=CFG.econ.demandBase+MKT.reduce((a,m)=>a+(s.mkt[m.id]?m.demand:0),0);};
 const spend=c=>{ if(s.money>=c){s.money-=c;save();return true;} return false; };
 recomputeDemand();
 
@@ -223,8 +237,8 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x8fc4e8);
-scene.fog=new THREE.Fog(0x8fc4e8,40,110);
+scene.background=new THREE.Color(CFG.theme.sky);
+scene.fog=new THREE.Fog(CFG.theme.sky,CFG.theme.fogNear,CFG.theme.fogFar);
 
 const camera=new THREE.PerspectiveCamera(55,1,0.1,300);
 
@@ -240,7 +254,7 @@ scene.add(sun);
 const WORLD=70;
 const ground=new THREE.Mesh(
   new THREE.CircleGeometry(WORLD,48),
-  new THREE.MeshStandardMaterial({color:0x4f9a4f})
+  new THREE.MeshStandardMaterial({color:CFG.theme.ground})
 );
 ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
 // caminos/parches de tierra para los edificios
@@ -358,7 +372,7 @@ const storeTiers=[
   variant(12,12,[ bbox(9,6.6,7.2,0x6a3d9a,3.3), bbox(9.5,0.6,7.7,0x4a2a72,6.7), bbox(3.0,1.0,0.3,0xffd24a,5.4), bdoor(3.65) ]),                               // T3 plaza
 ];
 let millPop=0, storePop=0, lastMt=-1, lastSt=-1;
-function tierOf(level){ return level>=6?3:level>=3?2:level>=1?1:0; }   // cambia desde la 1a compra
+function tierOf(level){ const a=CFG.tiers.buildingAt; return level>=a[2]?3:level>=a[1]?2:level>=a[0]?1:0; }
 function updateEvolutions(dt){
   const mt=tierOf(s.carpenters), st=tierOf(s.sellers);
   if(mt!==lastMt){ if(lastMt!==-1){ burst(new THREE.Vector3(-12,4,12),0x9ad0ff,16,4); sfxPop(); } lastMt=mt; millPop=0.5; }
@@ -650,7 +664,7 @@ function resetWorker(w,role,i){
 }
 function ensureWorkers(){
   for(const role of ["woodcutters","carpenters","sellers","tractors"]){
-    const arr=workerNPCs[role], want = role==="tractors" ? (s.tractors<3?Math.min(2,s.tractors):1)   // se consolidan en 1 cosechadora
+    const arr=workerNPCs[role], want = role==="tractors" ? (s.tractors<CFG.tiers.tractorConsolidate[0]?Math.min(2,s.tractors):1)  // se consolidan en 1 cosechadora
               : roleReplaced(role)?0:Math.min(WCAP[role],s[role]);                                     // máquina/banda = 0 humanos
     while(arr.length<want) arr.push(makeWorker(role,arr.length));
     for(let i=0;i<arr.length;i++){
@@ -722,7 +736,8 @@ function updateWorkers(dt){
   }
   // TRACTORES / COSECHADORAS: al subir, pocas máquinas pero MÁS GRANDES
   const harv=harvesterTier();
-  const tscale = s.tractors<3?0.95 : s.tractors<6?1.4 : 1.9;
+  const tc=CFG.tiers.tractorConsolidate, ts=CFG.tiers.tractorScale;
+  const tscale = s.tractors<tc[0]?ts[0] : s.tractors<tc[1]?ts[1] : ts[2];
   for(const w of workerNPCs.tractors){
     if(!w.on)continue;
     if(w.leaving){ if(walkNPC(w,LEAVE.x,LEAVE.z,4.6,dt)<2){ w.on=false; w.leaving=false; w.g.visible=false; } continue; }  // reemplazada por la grande → se va
