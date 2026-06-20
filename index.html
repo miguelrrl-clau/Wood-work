@@ -172,7 +172,7 @@ const save=()=>localStorage.setItem(SAVE_KEY,JSON.stringify(s));
 
 const REF_PRICE=10, ELASTICITY=1.25;
 const TOOLS=[
-  {name:"Serrucho",ic:"🪚",mult:1,cost:0},
+  {name:"Hacha",ic:"🪓",mult:1,cost:0},
   {name:"Sierra manual",ic:"🪚",mult:3,cost:40},
   {name:"Motosierra",ic:"⚙️",mult:9,cost:250},
   {name:"Cosechadora",ic:"🚜",mult:30,cost:1500},
@@ -305,42 +305,37 @@ function bchimney(x,y,z,c){ const m=new THREE.Mesh(new THREE.CylinderGeometry(0.
 function bdoor(z){ const m=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.2,0.2),new THREE.MeshStandardMaterial({color:0x2a1d10})); m.position.set(0,1.1,z); return m; }
 function variant(x,z,parts){ const g=new THREE.Group(); for(const p of parts) g.add(p); g.position.set(x,0,z); g.visible=false; scene.add(g); return g; }
 const millTiers=[
-  variant(-12,12,[ bbox(5,3.4,4.6,0x9c6b3f,1.7), bcone(4,2.2,0x7a3b2a,4.4), bdoor(2.4) ]),                                                                   // T0 cabaña de madera
+  variant(-12,12,[ bbox(3.4,2.4,3.2,0x9c6b3f,1.2), bcone(2.8,1.6,0x7a3b2a,3.0), bdoor(1.7) ]),                                                               // T0 choza humilde
   variant(-12,12,[ bbox(7,4.4,6,0xb5552e,2.2), bcone(5.6,2.8,0x6e2a1c,5.7), bchimney(2.4,5.2,-1.6,0x4a3326), bdoor(3.05) ]),                                  // T1 molino rojo
   variant(-12,12,[ bbox(8,5.6,6.6,0x6f7d86,2.8), bbox(8.4,0.6,7,0x44525a,5.8), bchimney(-2.6,6.4,-1.8,0x556069), bchimney(2.6,6.4,-1.8,0x556069), bdoor(3.35) ]), // T2 industrial gris
   variant(-12,12,[ bbox(9,7,7.2,0x35506b,3.5), bbox(9.5,0.7,7.7,0x24384d,7.1), bchimney(-3,7.8,-2,0x2b3e52), bchimney(0,8.2,-2,0x2b3e52), bchimney(3,7.8,-2,0x2b3e52), bbox(2.4,1.0,0.3,0x66e0ff,5.4), bdoor(3.65) ]), // T3 fábrica acero
 ];
 dirtPatch(-12,12,7);
-// === sierra del aserradero (proceso de corte visible) ===
+// === sierra del aserradero (todo dentro de sawRig para escalar con el nivel) ===
 const SAW_X=-12, SAW_Z=15.7;
-// banco/mesa con rieles del carro
+const sawRig=new THREE.Group(); sawRig.position.set(SAW_X,0,SAW_Z); scene.add(sawRig);   // coords LOCALes
 const sawTable=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.4,1.2),new THREE.MeshStandardMaterial({color:0x5a3a1f}));
-sawTable.position.set(SAW_X,1.0,SAW_Z); sawTable.castShadow=true; sawTable.receiveShadow=true; scene.add(sawTable);
-for(const zz of [-0.35,0.35]){ const rail=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.08,0.08),new THREE.MeshStandardMaterial({color:0x3a2616})); rail.position.set(SAW_X,1.24,SAW_Z+zz); scene.add(rail); }
-// tronco en el carro que avanza hacia la sierra
+sawTable.position.set(0,1.0,0); sawTable.castShadow=true; sawTable.receiveShadow=true; sawRig.add(sawTable);
+for(const zz of [-0.35,0.35]){ const rail=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.08,0.08),new THREE.MeshStandardMaterial({color:0x3a2616})); rail.position.set(0,1.24,zz); sawRig.add(rail); }
 const sawLog=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,1.7,12),new THREE.MeshStandardMaterial({color:0x7a4a24}));
-sawLog.rotation.z=Math.PI/2; sawLog.position.set(SAW_X-1.6,1.5,SAW_Z); sawLog.castShadow=true; scene.add(sawLog);
-// bastidor + disco vertical (su plano contiene el avance del tronco, como un aserradero real)
-const sawFrame=new THREE.Group(); sawFrame.position.set(SAW_X,0,SAW_Z); scene.add(sawFrame);
+sawLog.rotation.z=Math.PI/2; sawLog.position.set(-1.6,1.5,0); sawLog.castShadow=true; sawRig.add(sawLog);
+const sawFrame=new THREE.Group(); sawRig.add(sawFrame);
 for(const xx of [-0.5,0.5]){ const post=new THREE.Mesh(new THREE.BoxGeometry(0.12,2.2,0.12),new THREE.MeshStandardMaterial({color:0x2c3e50})); post.position.set(xx,1.6,0); post.castShadow=true; sawFrame.add(post); }
 const sawTop=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.14),new THREE.MeshStandardMaterial({color:0x2c3e50})); sawTop.position.set(0,2.7,0); sawFrame.add(sawTop);
-const sawPivot=new THREE.Group(); sawPivot.position.set(SAW_X,1.6,SAW_Z); scene.add(sawPivot);  // disco vertical, gira en el plano XY
+const sawPivot=new THREE.Group(); sawPivot.position.set(0,1.6,0); sawRig.add(sawPivot);
 const sawBlade=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.05,32),
   new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:.85,roughness:.18})); sawBlade.rotation.x=Math.PI/2; sawPivot.add(sawBlade);
 for(let i=0;i<16;i++){ const tooth=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.05),new THREE.MeshStandardMaterial({color:0x9aa6ad,metalness:.8})); const a=i/16*Math.PI*2; tooth.position.set(Math.cos(a)*0.9,Math.sin(a)*0.9,0); tooth.rotation.z=a; sawPivot.add(tooth); }
-// tablas que salen por el otro lado
 const outPlanks=[];
-for(let i=0;i<6;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.08,0.3),new THREE.MeshStandardMaterial({color:0xc79a5b})); p.castShadow=true; p.visible=false; p.position.set(SAW_X,1.32+(i%3)*0.11,SAW_Z+(i<3?-0.18:0.18)); scene.add(p); outPlanks.push(p); }
+for(let i=0;i<6;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.08,0.3),new THREE.MeshStandardMaterial({color:0xc79a5b})); p.castShadow=true; p.visible=false; p.position.set(0,1.32+(i%3)*0.11,(i<3?-0.18:0.18)); sawRig.add(p); outPlanks.push(p); }
 let cutT=0;
-// aserrín
 const chips=[];
 for(let i=0;i<18;i++){
   const c=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),new THREE.MeshStandardMaterial({color:0xe0bd86}));
-  c.visible=false; scene.add(c); chips.push({m:c,life:0,vel:new THREE.Vector3()});
+  c.visible=false; sawRig.add(c); chips.push({m:c,life:0,vel:new THREE.Vector3()});
 }
 let sawSpin=0, sawCutFlag=false;
-// segundo disco (aparece al subir el aserradero / carpinteros)
-const sawPivot2=new THREE.Group(); sawPivot2.position.set(SAW_X,1.6,SAW_Z+0.45); sawPivot2.visible=false; scene.add(sawPivot2);
+const sawPivot2=new THREE.Group(); sawPivot2.position.set(0,1.6,0.45); sawPivot2.visible=false; sawRig.add(sawPivot2);
 const sawBlade2=new THREE.Mesh(new THREE.CylinderGeometry(0.72,0.72,0.05,28),new THREE.MeshStandardMaterial({color:0xcfd8dc,metalness:.85,roughness:.18}));
 sawBlade2.rotation.x=Math.PI/2; sawBlade2.castShadow=true; sawPivot2.add(sawBlade2);
 // partículas genéricas (feedback jugoso): astillas al talar, brillo al vender, etc.
@@ -356,7 +351,7 @@ function burst(pos,color,n,power){
 }
 dirtPatch(12,12,7);
 const storeTiers=[
-  variant(12,12,[ bbox(5,3,4.6,0xc99a3f,1.5), bcone(4,1.8,0x2a5a7a,3.7), bbox(5.4,0.3,1.6,0xd64545,3.0), bdoor(2.4) ]),                                       // T0 puesto
+  variant(12,12,[ bbox(3.2,2.2,3.0,0xc99a3f,1.1), bcone(2.6,1.3,0x2a5a7a,2.7), bbox(3.4,0.25,1.1,0xd64545,2.2), bdoor(1.6) ]),                               // T0 puestito
   variant(12,12,[ bbox(7,4.2,6,0x2a8c7a,2.1), bcone(5.6,2.4,0x18564a,5.5), bbox(7.2,0.32,1.5,0xffffff,3.5), bdoor(3.05) ]),                                   // T1 tienda
   variant(12,12,[ bbox(8,5.2,6.6,0xe6edf0,2.6), bbox(8.4,0.5,7,0x9fb0bb,5.4), (()=>{const m=bbox(7.4,2.6,0.2,0x7fc7ff,1.8); m.position.z=3.05; m.material.transparent=true; m.material.opacity=0.55; return m;})(), bdoor(3.35) ]), // T2 super con vidrio
   variant(12,12,[ bbox(9,6.6,7.2,0x6a3d9a,3.3), bbox(9.5,0.6,7.7,0x4a2a72,6.7), bbox(3.0,1.0,0.3,0xffd24a,5.4), bdoor(3.65) ]),                               // T3 plaza
@@ -371,7 +366,7 @@ function updateEvolutions(dt){
   for(let i=0;i<millTiers.length;i++){ const on=(i===mt); millTiers[i].visible=on; if(on) millTiers[i].scale.setScalar(1+millPop*0.5); }
   for(let i=0;i<storeTiers.length;i++){ const on=(i===st); storeTiers[i].visible=on; if(on) storeTiers[i].scale.setScalar(1+storePop*0.5); }
   sawPivot2.visible = s.carpenters>=2;
-  sawPivot.scale.setScalar(1+mt*0.18);                 // la sierra crece con el tier
+  sawRig.scale.setScalar(0.55 + mt*0.22);              // arranca chiquita y crece con el tier
 }
 
 // letreros flotantes (sprites de texto)
@@ -465,10 +460,9 @@ player.position.set(0,0,-2); scene.add(player);
 // herramienta en la mano, según el nivel comprado
 function makeTool(level){
   const g=new THREE.Group();
-  if(level===0){ // serrucho
-    const blade=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.16,0.85),new THREE.MeshStandardMaterial({color:0xd0d8dc,metalness:.7,roughness:.3}));
-    blade.position.z=0.5; g.add(blade);
-    const handle=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.24,0.16),new THREE.MeshStandardMaterial({color:0x6b4423})); g.add(handle);
+  if(level===0){ // hacha
+    const handle=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.9),new THREE.MeshStandardMaterial({color:0x6b4423})); handle.position.z=0.45; handle.rotation.x=0.1; g.add(handle);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.3,0.22),new THREE.MeshStandardMaterial({color:0xb0bec5,metalness:.6})); head.position.set(0,0.04,0.82); g.add(head);
   } else if(level===1){ // sierra de arco
     const blade=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,1.15),new THREE.MeshStandardMaterial({color:0xd0d8dc,metalness:.7}));
     blade.position.z=0.6; g.add(blade);
@@ -1094,17 +1088,17 @@ function loop(){
   if(cutT>=2){ cutT-=2; }
   if(milling){ if(cutT>=1 && !sawCutFlag){ sawCutFlag=true; sfxSaw(); } if(cutT<1) sawCutFlag=false; }
   if(cutT<1){                                  // el tronco avanza hacia el disco
-    sawLog.visible=true; sawLog.position.x=(SAW_X-1.6)+cutT*1.6;
+    sawLog.visible=true; sawLog.position.x=-1.6+cutT*1.6;
     for(const p of outPlanks) p.visible=false;
   } else {                                     // salen las tablas por el otro lado
     sawLog.visible=false;
     const k=cutT-1, np=Math.min(outPlanks.length,2+Math.ceil(s.carpenters*0.7));   // más carpinteros = más tablas por corte
-    for(let i=0;i<outPlanks.length;i++){ const on=i<np; outPlanks[i].visible=on; if(on) outPlanks[i].position.x=SAW_X+k*2.2; }
+    for(let i=0;i<outPlanks.length;i++){ const on=i<np; outPlanks[i].visible=on; if(on) outPlanks[i].position.x=k*2.2; }
   }
   for(const ch of chips){
     if(ch.life>0){ ch.life-=dt; ch.m.position.addScaledVector(ch.vel,dt); ch.vel.y-=10*dt; if(ch.life<=0) ch.m.visible=false; }
     else if(milling && cutT<1.1 && Math.random()<0.6){ ch.life=0.5; ch.m.visible=true;
-      ch.m.position.set(SAW_X+(Math.random()-0.5)*0.3,1.7,SAW_Z+(Math.random()-0.5)*0.4);
+      ch.m.position.set((Math.random()-0.5)*0.3,1.7,(Math.random()-0.5)*0.4);
       ch.vel.set((Math.random()-0.5)*3,2+Math.random()*2.5,(Math.random()-0.5)*3); }
   }
 
