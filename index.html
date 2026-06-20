@@ -168,7 +168,8 @@ const def = () => ({
   price:10, demandLevel:2, mkt:{},
 });
 let s = (()=>{ try{const r=JSON.parse(localStorage.getItem(SAVE_KEY));if(r)return Object.assign(def(),r);}catch(e){} return def(); })();
-const save=()=>localStorage.setItem(SAVE_KEY,JSON.stringify(s));
+let noSave=false;
+const save=()=>{ if(noSave)return; localStorage.setItem(SAVE_KEY,JSON.stringify(s)); };
 
 const REF_PRICE=10, ELASTICITY=1.25;
 const TOOLS=[
@@ -1276,7 +1277,7 @@ addEventListener("resize",resize); resize();
 
 $("startBtn").onclick=()=>{ $("help").style.display="none"; helpOpen=false; initAudio(); };
 $("muteBtn").onclick=()=>{ soundOn=!soundOn; if(soundOn)initAudio(); $("muteBtn").textContent=soundOn?"🔊 Sonido":"🔇 Silencio"; };
-$("resetBtn").onclick=()=>{ if(confirm("¿Reiniciar desde 0? (se borra tu progreso)")){ localStorage.removeItem(SAVE_KEY); location.reload(); } };
+$("resetBtn").onclick=()=>{ if(confirm("¿Reiniciar desde 0? (se borra tu progreso)")){ noSave=true; localStorage.removeItem(SAVE_KEY); location.reload(); } };
 $("helpBtn").onclick=()=>{ $("help").style.display="flex"; helpOpen=true; };
 setInterval(save,3000); addEventListener("beforeunload",save);
 renderShop();
