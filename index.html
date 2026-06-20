@@ -106,6 +106,7 @@
   <button class="fbtn" id="openShop">🏪 Tienda</button>
   <button class="fbtn" id="muteBtn">🔊 Sonido</button>
   <button class="fbtn" id="helpBtn">❔ Controles</button>
+  <button class="fbtn" id="resetBtn">↺ Reiniciar</button>
 </div>
 
 <div class="ui" id="prompt"></div>
@@ -360,11 +361,15 @@ const storeTiers=[
   variant(12,12,[ bbox(8,5.2,6.6,0xe6edf0,2.6), bbox(8.4,0.5,7,0x9fb0bb,5.4), (()=>{const m=bbox(7.4,2.6,0.2,0x7fc7ff,1.8); m.position.z=3.05; m.material.transparent=true; m.material.opacity=0.55; return m;})(), bdoor(3.35) ]), // T2 super con vidrio
   variant(12,12,[ bbox(9,6.6,7.2,0x6a3d9a,3.3), bbox(9.5,0.6,7.7,0x4a2a72,6.7), bbox(3.0,1.0,0.3,0xffd24a,5.4), bdoor(3.65) ]),                               // T3 plaza
 ];
-function updateEvolutions(){
-  const mt = s.carpenters<2?0:s.carpenters<4?1:s.carpenters<6?2:3;
-  const st = s.sellers<1?0:s.sellers<3?1:s.sellers<5?2:3;
-  for(let i=0;i<millTiers.length;i++) millTiers[i].visible=(i===mt);
-  for(let i=0;i<storeTiers.length;i++) storeTiers[i].visible=(i===st);
+let millPop=0, storePop=0, lastMt=-1, lastSt=-1;
+function tierOf(level){ return level>=6?3:level>=3?2:level>=1?1:0; }   // cambia desde la 1a compra
+function updateEvolutions(dt){
+  const mt=tierOf(s.carpenters), st=tierOf(s.sellers);
+  if(mt!==lastMt){ if(lastMt!==-1){ burst(new THREE.Vector3(-12,4,12),0x9ad0ff,16,4); sfxPop(); } lastMt=mt; millPop=0.5; }
+  if(st!==lastSt){ if(lastSt!==-1){ burst(new THREE.Vector3(12,4,12),0xffd24a,16,4); sfxPop(); } lastSt=st; storePop=0.5; }
+  millPop=Math.max(0,millPop-dt); storePop=Math.max(0,storePop-dt);
+  for(let i=0;i<millTiers.length;i++){ const on=(i===mt); millTiers[i].visible=on; if(on) millTiers[i].scale.setScalar(1+millPop*0.5); }
+  for(let i=0;i<storeTiers.length;i++){ const on=(i===st); storeTiers[i].visible=on; if(on) storeTiers[i].scale.setScalar(1+storePop*0.5); }
   sawPivot2.visible = s.carpenters>=2;
   sawPivot.scale.setScalar(1+mt*0.18);                 // la sierra crece con el tier
 }
@@ -1142,7 +1147,7 @@ function loop(){
   lostSales*=Math.max(0,1-dt*0.4);
 
   // --- lo comprado, visible ---
-  ensureWorkers(); updateWorkers(dt); updateBuys(dt); updateEvolutions(); resolveCollisions();
+  ensureWorkers(); updateWorkers(dt); updateBuys(dt); updateEvolutions(dt); resolveCollisions();
   for(let i=0;i<billboards.length;i++) billboards[i].visible=!!s.mkt[MKT[i].id];
   // bandas transportadoras animadas
   animBelt(plankBelt, s.belt, dt);
@@ -1277,6 +1282,7 @@ addEventListener("resize",resize); resize();
 
 $("startBtn").onclick=()=>{ $("help").style.display="none"; helpOpen=false; initAudio(); };
 $("muteBtn").onclick=()=>{ soundOn=!soundOn; if(soundOn)initAudio(); $("muteBtn").textContent=soundOn?"🔊 Sonido":"🔇 Silencio"; };
+$("resetBtn").onclick=()=>{ if(confirm("¿Reiniciar desde 0? (se borra tu progreso)")){ localStorage.removeItem(SAVE_KEY); location.reload(); } };
 $("helpBtn").onclick=()=>{ $("help").style.display="flex"; helpOpen=true; };
 setInterval(save,3000); addEventListener("beforeunload",save);
 renderShop();
