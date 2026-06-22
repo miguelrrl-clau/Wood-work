@@ -505,19 +505,29 @@ equipTool();
 
 // ===================== ESTACIONES: input/output, repisa, clientes =====================
 // pads de zona donde el jugador deja/recoge material
-function makePad(x,z,color,text){
+function iconSprite(emoji){               // pictograma (sin palabras) flotando sobre el pad
+  const cv=document.createElement("canvas"); cv.width=192; cv.height=140;
+  const ctx=cv.getContext("2d");
+  ctx.fillStyle="rgba(0,0,0,.4)"; roundRect(ctx,8,8,176,124,26); ctx.fill();
+  ctx.font="84px -apple-system,sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(emoji,96,76);
+  const tex=new THREE.CanvasTexture(cv); tex.anisotropy=4;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false})); sp.scale.set(2.5,1.85,1);
+  return sp;
+}
+function makePad(x,z,color,emoji){
   const ring=new THREE.Mesh(new THREE.RingGeometry(1.15,1.55,28),new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,transparent:true,opacity:.85}));
   ring.rotation.x=-Math.PI/2; ring.position.set(x,0.06,z); scene.add(ring);
   const fill=new THREE.Mesh(new THREE.CircleGeometry(1.15,28),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.22}));
   fill.rotation.x=-Math.PI/2; fill.position.set(x,0.05,z); scene.add(fill);
-  const lab=textSprite(text,"#ffffff"); lab.scale.set(4.4,1.1,1); lab.position.set(x,2.4,z); scene.add(lab);
+  const lab=iconSprite(emoji); lab.position.set(x,2.3,z); scene.add(lab);
   return new THREE.Vector3(x,0,z);
 }
 const zones=[
-  {type:"millIn",  pos:makePad(-15.5,16.8,0xffb366,"📥 Mete madera"), r:2.3},
-  {type:"millOut", pos:makePad(-8.5,16.8,0x66ccff,"📤 Saca tablas"),  r:2.3},
-  {type:"storeIn", pos:makePad(8.5,16.8,0x66ff99,"📥 Surte tienda"),  r:2.3},
-  {type:"cash",    pos:makePad(15.6,18.8,0xffd24a,"💰 Cobrar"),       r:2.4},
+  {type:"millIn",  pos:makePad(-15.5,16.8,0xffb366,"🪵⬇️"), r:2.3},   // dejar madera
+  {type:"millOut", pos:makePad(-8.5,16.8,0x66ccff,"🪚⬆️"),  r:2.3},   // recoger tablas
+  {type:"storeIn", pos:makePad(8.5,16.8,0x66ff99,"🏪⬇️"),   r:2.3},   // surtir tienda
+  {type:"cash",    pos:makePad(15.6,18.8,0xffd24a,"💰"),    r:2.4},   // cobrar
 ];
 // pilas visibles de cada buffer
 function makeStackPool(x,z,kind,n,baseY,cols){
@@ -790,21 +800,30 @@ function makeBelt(x0,len,z,kind){
   const nlegs=Math.max(2,Math.round(len/3.3));
   for(let i=0;i<=nlegs;i++){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.18,BELT_Y,0.18),new THREE.MeshStandardMaterial({color:0x555555})); leg.position.set(x0+i*(len/nlegs),BELT_Y/2,z); group.add(leg); }
   for(const ex of [x0,x0+len]){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.97,12),new THREE.MeshStandardMaterial({color:0x888888,metalness:.5})); r.rotation.x=Math.PI/2; r.position.set(ex,BELT_Y,z); group.add(r); }
+  // motor + guías laterales (aparecen al subir nivel)
+  const motor=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,1.2),new THREE.MeshStandardMaterial({color:0xe67e22})); motor.position.set(x0+len-0.1,BELT_Y+0.05,z); motor.castShadow=true; group.add(motor);
+  const guards=new THREE.Group();
+  for(const zz of [-0.5,0.5]){ const gd=new THREE.Mesh(new THREE.BoxGeometry(len,0.16,0.06),new THREE.MeshStandardMaterial({color:0x9aa6ad,metalness:.4})); gd.position.set(x0+len/2,BELT_Y+0.2,z+zz); guards.add(gd); }
+  group.add(guards);
   group.visible=false; scene.add(group);
   const items=[];
-  for(let i=0;i<8;i++){
+  for(let i=0;i<10;i++){
     let p;
     if(kind==="log"){ p=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,8),new THREE.MeshStandardMaterial({color:0x7a4a24})); p.rotation.z=Math.PI/2; }
     else { p=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.12,0.46),new THREE.MeshStandardMaterial({color:0xc79a5b})); }
     p.castShadow=true; p.visible=false; scene.add(p); items.push(p);
   }
-  return {group,items,x0,len,z,off:0};
+  return {group,items,surf,motor,guards,x0,len,z,off:0};
 }
 function animBelt(b,level,dt){
   b.group.visible=level>0;
   if(level<=0){ for(const p of b.items) p.visible=false; return; }
-  b.off += 2.6*dt;                                  // siempre corriendo (sin parpadeo)
-  const N=Math.min(b.items.length,2+level*2);
+  // apariencia por nivel: color, motor y guías
+  b.surf.material.color.setHex(level>=4?0x1b6fa8 : level>=2?0x2f6d34 : 0x2b3138);
+  b.motor.visible = level>=2; b.guards.visible = level>=2;
+  const speed=2.2+level*1.1;                         // más rápida al subir
+  b.off += speed*dt;
+  const N=Math.min(b.items.length,1+level*2);        // más tablas al subir
   for(let i=0;i<b.items.length;i++){
     b.items[i].visible = i<N;
     if(i<N){ const t=(b.off+i*(b.len/N))%b.len; b.items[i].position.set(b.x0+t,BELT_Y+0.22,b.z); }
@@ -863,7 +882,7 @@ const BUYS=[
   {x:-17,z:9,    id:"carpenters",  label:"🏭 +Aserradero",  price:()=>workerCost("carpenters"),  apply:()=>s.carpenters++},
   {x:17, z:9,    id:"sellers",     label:"🏪 +Tienda",      price:()=>workerCost("sellers"),     apply:()=>s.sellers++},
   {x:-22,z:13,   id:"tractors",    label:"🚜 Tractor",      price:()=>workerCost("tractors"),    apply:()=>s.tractors++},
-  {x:3,  z:20.5, id:"belt",        label:"📦 Banda tablas", price:()=>machineCost(MACHINES[0]),  apply:()=>s.belt++},
+  {x:3,  z:20.5, id:"belt",        label:"📦 Banda",        price:()=>machineCost(MACHINES[0]),  apply:()=>s.belt++, lock:()=>s.sellers<2, lockMsg:"contrata 2 vendedores"},
 ];
 for(const n of BUYS){
   const ring=new THREE.Mesh(new THREE.RingGeometry(0.9,1.3,24),new THREE.MeshBasicMaterial({color:0xffe082,side:THREE.DoubleSide,transparent:true,opacity:.85}));
@@ -883,6 +902,14 @@ function updateBuys(dt){
   for(const n of BUYS){
     if(n.gone) continue;                                  // desaparecido para siempre
     const price=n.price();
+    // bloqueado: requiere algo antes (p.ej. la banda pide vendedores)
+    if(n.lock && n.lock()){
+      n.ring.visible=true; n.model.visible=true; n.sprite.visible=true; n.hidden=false;
+      n.model.rotation.y+=dt*0.8; n.model.position.y=0.6+Math.sin(tAccum*2+n.x)*0.08;
+      n.ring.material.opacity=0.7;
+      if(n.shown!=="LOCK"){ n.shown="LOCK"; tintModel(n.model,false); n.ring.material.color.setHex(0x6b6f72); n.sprite.userData.draw("🔒 "+n.label, n.lockMsg, "#ff8a8a"); }
+      continue;
+    }
     // leñador desaparece definitivamente cuando ya hay cosechadora
     if(n.id==="woodcutters" && harvesterTier()){ hideNode(n,true); continue; }
     // tractor: muestra partes de cosechadora y cambia su etiqueta
